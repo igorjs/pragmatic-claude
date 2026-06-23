@@ -4,9 +4,13 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from .planner import Commit
+from .planner import Commit, SquashGroup
+
+# The well-known SHA of git's empty tree, used as the base when a squashed run
+# starts at the root commit (no parent).
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class NoUpstreamError(Exception):
@@ -179,3 +183,161 @@ def rewrite_dates(
             capture_output=True, check=False,
         )
         raise RewriteError(f"filter-branch failed: {r.stderr or r.stdout}")
+
+
+def parent_sha(repo: Path, sha: str) -> Optional[str]:
+    """First-parent SHA of ``sha``, or None if it is a root commit."""
+    r = _git(repo, "rev-parse", "--verify", "--quiet", f"{sha}^", check=False)
+    out = r.stdout.strip()
+    return out or None
+
+
+def commit_subject(repo: Path, sha: str) -> str:
+    """The subject line (first line) of a commit's message."""
+    return _git(repo, "show", "-s", "--format=%s", sha).stdout.strip()
+
+
+def commit_message(repo: Path, sha: str) -> str:
+    """The full message (subject + body) of a commit, trailing newline stripped."""
+    return _commit_meta(repo, sha)["message"]
+
+
+def _commit_meta(repo: Path, sha: str) -> Dict[str, str]:
+    """Tree SHA, author/committer identity + dates, and full message for a commit."""
+    fmt = "%T%n%an%n%ae%n%aI%n%cn%n%ce%n%cI"
+    head = _git(repo, "show", "-s", f"--format={fmt}", sha).stdout.split("\n")
+    body = _git(repo, "log", "-1", "--format=%B", sha).stdout
+    # Strip the single trailing newline git appends to %B; keep internal newlines.
+    if body.endswith("\n"):
+        body = body[:-1]
+    return {
+        "tree": head[0],
+        "an": head[1],
+        "ae": head[2],
+        "aI": head[3],
+        "cn": head[4],
+        "ce": head[5],
+        "cI": head[6],
+        "message": body,
+    }
+
+
+def diff_shortstat(repo: Path, base: Optional[str], rep: str) -> str:
+    """One-line `--shortstat` summary of base..rep (empty tree when base is None)."""
+    base_ref = base if base is not None else EMPTY_TREE
+    r = _git(repo, "diff", "--shortstat", base_ref, rep, check=False)
+    return r.stdout.strip()
+
+
+def _commit_tree(
+    repo: Path,
+    *,
+    tree: str,
+    parent: Optional[str],
+    author: Tuple[str, str, str],
+    committer: Tuple[str, str, str],
+    message: str,
+    sign: bool,
+) -> str:
+    """Create a commit object via plumbing and return its SHA."""
+    args = ["git", "-C", str(repo), "commit-tree", tree]
+    if parent is not None:
+        args += ["-p", parent]
+    if sign:
+        args += ["-S"]
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": author[0],
+        "GIT_AUTHOR_EMAIL": author[1],
+        "GIT_AUTHOR_DATE": author[2],
+        "GIT_COMMITTER_NAME": committer[0],
+        "GIT_COMMITTER_EMAIL": committer[1],
+        "GIT_COMMITTER_DATE": committer[2],
+    }
+    r = subprocess.run(args, input=message, capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        raise RewriteError(f"commit-tree failed: {r.stderr or r.stdout}")
+    return r.stdout.strip()
+
+
+def squash_rebuild(
+    repo: Path,
+    *,
+    range_commits: List[Commit],
+    groups: List[SquashGroup],
+    messages: Dict[str, str],
+    sign: bool,
+) -> str:
+    """Rebuild ``range_commits`` with each SquashGroup collapsed, via commit-tree.
+
+    Folding groups drop their run members and re-emit the target commit (its tree,
+    identity and date preserved) with the combined ``messages[target_sha]``.
+    Synthesizing groups drop all-but-last run members and emit one commit using the
+    last member's tree, the group's ``new_date``, and ``messages[run_shas[-1]]``.
+    All other commits pass through re-parented (and re-signed when ``sign``).
+
+    Returns the new HEAD SHA and moves the current branch (and working tree) to it.
+    """
+    orig_tree = _git(repo, "rev-parse", "HEAD^{tree}").stdout.strip()
+
+    drop: set = set()
+    fold_by_target: Dict[str, SquashGroup] = {}
+    synth_by_last: Dict[str, SquashGroup] = {}
+    for g in groups:
+        if g.target_sha is not None:
+            drop.update(g.run_shas)
+            fold_by_target[g.target_sha] = g
+        else:
+            drop.update(g.run_shas[:-1])
+            synth_by_last[g.run_shas[-1]] = g
+
+    new_parent = parent_sha(repo, range_commits[0].sha)
+
+    for c in range_commits:
+        sha = c.sha
+        if sha in drop:
+            continue
+        meta = _commit_meta(repo, sha)
+
+        if sha in fold_by_target:
+            message = messages[sha]
+            author = (meta["an"], meta["ae"], meta["aI"])
+            committer = (meta["cn"], meta["ce"], meta["cI"])
+        elif sha in synth_by_last:
+            g = synth_by_last[sha]
+            message = messages[sha]
+            iso = g.new_date.isoformat()
+            author = (meta["an"], meta["ae"], iso)
+            committer = (meta["cn"], meta["ce"], iso)
+        else:
+            message = meta["message"]
+            author = (meta["an"], meta["ae"], meta["aI"])
+            committer = (meta["cn"], meta["ce"], meta["cI"])
+
+        new_parent = _commit_tree(
+            repo,
+            tree=meta["tree"],
+            parent=new_parent,
+            author=author,
+            committer=committer,
+            message=message,
+            sign=sign,
+        )
+
+    if new_parent is None:
+        raise RewriteError("squash rebuild produced no commits")
+
+    # Safety invariant: collapsing commits must never change the final content.
+    new_tree = _git(repo, "rev-parse", f"{new_parent}^{{tree}}").stdout.strip()
+    if new_tree != orig_tree:
+        raise RewriteError(
+            "squash would change the working-tree content (tree mismatch); aborted "
+            "without moving the branch"
+        )
+
+    # --soft moves the branch ref only, leaving the index and working tree intact
+    # (the tree is provably identical), so any uncommitted changes are preserved.
+    reset = _git(repo, "reset", "--soft", new_parent, check=False)
+    if reset.returncode != 0:
+        raise RewriteError(f"could not move branch to rebuilt history: {reset.stderr}")
+    return new_parent

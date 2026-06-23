@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from sanitize_personal_commits.planner import Commit, plan_rewrites
+from sanitize_personal_commits.windows import is_forbidden
 
 SYD = ZoneInfo("Australia/Sydney")
 
@@ -99,15 +100,63 @@ def test_no_rewrite_when_only_allowed_commits():
     assert result == []
 
 
-def test_run_out_of_past_raises():
-    # Commits inside forbidden window with huge min_gap (lines=10000 → capped at 600s).
-    # now is Mon 08:30 → ~30min of "after forbidden start" past available before being too close to now.
-    # 10 commits at 10min spacing minimum can't fit.
-    base = datetime(2026, 6, 22, 10, 0, tzinfo=SYD)
-    commits = [C(f"c{i}", base + timedelta(seconds=i), lines=10000) for i in range(10)]
-    now = datetime(2026, 6, 22, 8, 30, tzinfo=SYD)
+def test_genuine_no_room_raises():
+    # A foreign anchor at Mon 09:00 pins the floor; the lone own commit just after
+    # it must land in (09:00, 09:04) — entirely hard window — and cannot go earlier
+    # than the anchor. No valid slot exists, so the planner raises.
+    anchor = C("f", datetime(2026, 6, 22, 9, 0, 0, tzinfo=SYD), is_foreign=True)
+    b = C("b", datetime(2026, 6, 22, 9, 0, 30, tzinfo=SYD), lines=10)
+    now = datetime(2026, 6, 22, 9, 5, tzinfo=SYD)
     with pytest.raises(RuntimeError):
-        plan_rewrites(commits, now=now, rng_seed=1)
+        plan_rewrites([anchor, b], now=now, rng_seed=1)
+
+
+def test_late_afternoon_cluster_does_not_run_out_of_past():
+    # Regression: ten commits clustered in a single weekday afternoon, with `now`
+    # only minutes after the last one. Forward placement ran out of runway before
+    # `now`; backward fill has the whole prior night/evening available.
+    base = datetime(2026, 6, 23, 15, 57, tzinfo=SYD)  # Tue afternoon
+    commits = [C(f"c{i}", base + timedelta(minutes=6 * i), lines=20) for i in range(10)]
+    now = datetime(2026, 6, 23, 18, 22, tzinfo=SYD)
+    result = plan_rewrites(commits, now=now, rng_seed=1)
+    assert len(result) == 10
+    for sha, dt in result:
+        assert not is_forbidden(dt), f"{sha} landed in hard window: {dt}"
+    placed = [dt for _, dt in result]
+    assert placed == sorted(placed), "chronological order not preserved"
+    assert len(set(placed)) == 10, "timestamps collapsed onto each other"
+
+
+def test_placements_are_scattered_not_pinned_to_one_instant():
+    # Anti-suspicion: results must not all share the same clock time (the old
+    # behaviour pinned everything to 07:59:59).
+    base = datetime(2026, 6, 23, 10, 0, tzinfo=SYD)
+    commits = [C(f"c{i}", base + timedelta(minutes=i), lines=5) for i in range(8)]
+    now = datetime(2026, 6, 23, 23, 0, tzinfo=SYD)
+    result = plan_rewrites(commits, now=now, rng_seed=5)
+    clock = {dt.astimezone(SYD).strftime("%H:%M:%S") for _, dt in result}
+    assert len(clock) > 1, f"all placements share one clock time: {clock}"
+
+
+def test_different_seeds_produce_different_placements():
+    base = datetime(2026, 6, 23, 10, 0, tzinfo=SYD)
+    commits = [C(f"c{i}", base + timedelta(minutes=i), lines=5) for i in range(6)]
+    now = datetime(2026, 6, 23, 23, 0, tzinfo=SYD)
+    r1 = plan_rewrites(commits, now=now, rng_seed=1)
+    r2 = plan_rewrites(commits, now=now, rng_seed=2)
+    assert r1 != r2
+
+
+def test_now_during_business_hours_still_places_into_off_hours():
+    # Running mid-afternoon: the prior night/evening is the only runway. Must not
+    # raise and must keep everything out of the hard window.
+    base = datetime(2026, 6, 23, 9, 30, tzinfo=SYD)
+    commits = [C(f"c{i}", base + timedelta(minutes=5 * i), lines=5) for i in range(5)]
+    now = datetime(2026, 6, 23, 14, 0, tzinfo=SYD)
+    result = plan_rewrites(commits, now=now, rng_seed=3)
+    assert len(result) == 5
+    for sha, dt in result:
+        assert not is_forbidden(dt), f"{sha} landed in hard window: {dt}"
 
 
 def test_resulting_timestamps_are_in_allowed_windows():

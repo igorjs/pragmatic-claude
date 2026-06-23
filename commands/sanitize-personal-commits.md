@@ -1,7 +1,7 @@
 ---
 description: Rewrite business-hours commit timestamps from the first violation onward, back up, then push. On-demand, so history changes only when you ask.
 allowed-tools: Bash
-argument-hint: "[--dry-run] [--all] [git push args]"
+argument-hint: "[--dry-run] [--all] [--squash] [git push args]"
 ---
 
 # Sanitize Personal Commits
@@ -34,6 +34,7 @@ flags from the trailing `git push` args:
 
 - `--dry-run` → show the planned rewrites, the backup branch, and the push that would run, change nothing.
 - `--all` → rewrite the entire history (root..HEAD), re-signing every commit, instead of only from the first violation.
+- `--squash` → collapse each contiguous run of business-hours commits into a single commit dated after 17:00, folding it into the immediately following same-day after-17:00 commit when one exists (which keeps its date), otherwise synthesizing one new commit on that day. The combined message is regenerated to describe the changes only. Use instead of the default scatter when you'd rather have one tidy commit per session.
 - Everything else (`origin`, branch refs, `-u`, etc.) is forwarded to `git push`.
 
 No args means: rewrite from the first violation if needed, then `git push` (force-with-lease only if the range was already pushed).
@@ -64,8 +65,9 @@ Map the exit code to a one-line outcome for the user:
 - `3` — another instance holds the lock for this repo; retry once it frees.
 - `4` — signing not configured (`commit.gpgsign` + `user.signingkey` required). Nothing was rewritten or pushed.
 - `5` — the rewrite planner could not fit the commits into valid timestamps. Nothing pushed.
-- `6` — backup or `git filter-branch` failed; the engine reset to `ORIG_HEAD`. Nothing pushed.
-- `7` — the rewrite range contains commits by another author; refused so it never force-pushes history that isn't solely yours. Nothing changed.
+- `6` — backup or the rewrite (`git filter-branch`, or the `--squash` rebuild) failed; the engine restored the original HEAD. Nothing pushed.
+- `7` — the range contains commits by another author (any mode), or merge commits with `--squash`; refused so it never force-pushes history that isn't safely, solely yours. Nothing changed.
+- `8` — `--squash` only: a business-hours run has no after-17:00 slot at or before now (e.g. you ran it mid-workday). Re-run after 17:00. Nothing changed.
 
 For any non-zero code, surface the engine's stderr verbatim and stop. Don't retry automatically (except to tell the user a `3` is safe to retry).
 
@@ -82,6 +84,7 @@ If `$backup` is set, ask: "Rewrite pushed successfully. Delete the backup branch
 ## Notes
 
 - Preview first with `/sanitize-personal-commits --dry-run` to see which commits would move, the backup branch, and whether the push would be forced.
-- Merge commits and commits authored by someone else are never rewritten; they anchor ordering. A foreign commit inside the rewrite range aborts the run (exit `7`).
+- Merge commits and commits authored by someone else are never rewritten; they anchor ordering. A foreign commit inside the rewrite range aborts the run (exit `7`). In `--squash` mode a merge commit inside the range also aborts (exit `7`), since the linear rebuild can't reconstruct it.
+- `--squash` rebuilds via `git commit-tree` (not `filter-branch`), re-signs every commit, and verifies the final tree is byte-identical before moving the branch with `reset --soft` (so uncommitted changes are preserved). The squashed commit's message is AI-generated to describe the code changes and never references squashing, timestamps, or hours.
 - Commits that land in (or already sit in) the 08:00-09:00 / 17:00-18:00 buffer print a `WARNING` to stderr but do not fail the run. Surface those warnings to the user.
 - The engine reads the hard/soft caps and timezone from `sanitize_personal_commits/windows.py` (`HARD_*_HOUR`, `SOFT_*_HOUR`). Change them there, not here.

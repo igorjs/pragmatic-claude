@@ -141,6 +141,59 @@ def test_buffer_only_commit_warns_but_does_not_rewrite(tmp_path):
     assert "would run: git push" in r.stdout
 
 
+def test_squash_dry_run_folds_into_evening_commit(tmp_path):
+    repo = _setup_repo(tmp_path)
+    _commit(repo, "biz1", "2026-06-15T10:00:00+10:00")  # Mon — forbidden
+    _commit(repo, "biz2", "2026-06-15T12:00:00+10:00")  # forbidden
+    _commit(repo, "eve", "2026-06-15T19:00:00+10:00")   # same-day evening — fold target
+
+    r = subprocess.run(
+        [sys.executable, str(HOOK), "--squash", "--dry-run"],
+        cwd=str(repo), capture_output=True, text=True,
+    )
+    assert r.returncode == 0, f"stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert "planned squash" in r.stdout
+    assert "fold 2 commit(s)" in r.stdout
+    assert "keeps its date" in r.stdout
+    assert "rebuild" in r.stdout
+
+
+def test_squash_dry_run_synthesizes_when_no_evening_neighbor(tmp_path):
+    repo = _setup_repo(tmp_path)
+    _commit(repo, "biz1", "2026-06-15T10:00:00+10:00")  # forbidden, HEAD
+    _commit(repo, "biz2", "2026-06-15T12:00:00+10:00")  # forbidden, HEAD
+
+    r = subprocess.run(
+        [sys.executable, str(HOOK), "--squash", "--dry-run"],
+        cwd=str(repo), capture_output=True, text=True,
+    )
+    assert r.returncode == 0, f"stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert "planned squash" in r.stdout
+    assert "into a new commit at" in r.stdout
+
+
+def test_squash_refuses_merge_in_range(tmp_path):
+    repo = _setup_repo(tmp_path)
+    _commit(repo, "biz1", "2026-06-15T10:00:00+10:00")  # forbidden
+    # Build a side branch and merge it to create a true merge commit in range.
+    _git(repo, "checkout", "-q", "-b", "side")
+    _commit(repo, "side1", "2026-06-15T11:00:00+10:00")
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, "main1", "2026-06-15T11:30:00+10:00")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side",
+         env={"GIT_AUTHOR_DATE": "2026-06-15T12:00:00+10:00",
+              "GIT_COMMITTER_DATE": "2026-06-15T12:00:00+10:00",
+              "GIT_AUTHOR_EMAIL": "me@example.com", "GIT_COMMITTER_EMAIL": "me@example.com",
+              "GIT_AUTHOR_NAME": "me", "GIT_COMMITTER_NAME": "me"})
+
+    r = subprocess.run(
+        [sys.executable, str(HOOK), "--squash", "--dry-run"],
+        cwd=str(repo), capture_output=True, text=True,
+    )
+    assert r.returncode == 7, f"stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert "merge commit" in r.stderr
+
+
 def test_refuses_when_foreign_commit_in_range(tmp_path):
     repo = _setup_repo(tmp_path)
     _commit(repo, "biz1", "2026-06-15T10:00:00+10:00")  # forbidden, mine
