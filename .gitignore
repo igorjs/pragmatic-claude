@@ -6,6 +6,8 @@
 
 # --- Custom content to track ---
 !/.gitignore
+!/README.md
+!/LICENSE
 !/prompts/
 !/settings.json
 !/statusline.sh

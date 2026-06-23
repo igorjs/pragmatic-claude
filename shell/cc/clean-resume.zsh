@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: Apache-2.0
 # cc module: clean resume (clone transcript, strip config overrides)
 #
 # Clone the latest matching transcript with config-override slash commands

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: Apache-2.0
 # cc module: config-drift tracking (conditional fork)
 #
 # Determines whether runtime config changed since a project last launched, so

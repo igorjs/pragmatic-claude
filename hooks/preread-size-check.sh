@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: Apache-2.0
 # PreToolUse hook on Read: deny a full-file Read when the file is large and no
 # offset/limit was provided. Pushes Claude toward Grep-first, then targeted Read.
 #
