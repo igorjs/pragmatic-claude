@@ -4,7 +4,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from git_push_guard.windows import is_forbidden, snap_to_nearest_allowed
+from sanitize_personal_commits.windows import (
+    in_soft_buffer,
+    is_forbidden,
+    is_soft,
+    snap_out_of_hard,
+    snap_to_nearest_allowed,
+)
 
 SYD = ZoneInfo("Australia/Sydney")
 
@@ -30,13 +36,54 @@ def test_monday_early_morning_allowed():
     assert is_forbidden(datetime(2026, 6, 22, 7, 0, tzinfo=SYD)) is False
 
 
-def test_monday_8am_forbidden():
-    assert is_forbidden(datetime(2026, 6, 22, 8, 0, tzinfo=SYD)) is True
+def test_monday_8am_is_soft_buffer_not_hard():
+    # 08:00 is the soft buffer now: tolerated, not a hard violation.
+    dt = datetime(2026, 6, 22, 8, 0, tzinfo=SYD)
+    assert is_forbidden(dt) is False
+    assert is_soft(dt) is True
+    assert in_soft_buffer(dt) is True
+
+
+def test_monday_9am_is_hard():
+    dt = datetime(2026, 6, 22, 9, 0, tzinfo=SYD)
+    assert is_forbidden(dt) is True
+    assert in_soft_buffer(dt) is False
+
+
+def test_monday_1659_is_hard():
+    assert is_forbidden(datetime(2026, 6, 22, 16, 59, tzinfo=SYD)) is True
+
+
+def test_monday_17h_is_soft_buffer_not_hard():
+    # Hard window is [09:00, 17:00); 17:00 sharp falls into the 17-18 buffer.
+    dt = datetime(2026, 6, 22, 17, 0, tzinfo=SYD)
+    assert is_forbidden(dt) is False
+    assert in_soft_buffer(dt) is True
 
 
 def test_monday_18h_allowed():
-    # Boundary: 18:00 sharp is allowed (forbidden window is [08:00, 18:00))
-    assert is_forbidden(datetime(2026, 6, 22, 18, 0, tzinfo=SYD)) is False
+    # Boundary: 18:00 sharp is fully allowed (soft window is [08:00, 18:00))
+    dt = datetime(2026, 6, 22, 18, 0, tzinfo=SYD)
+    assert is_forbidden(dt) is False
+    assert is_soft(dt) is False
+    assert in_soft_buffer(dt) is False
+
+
+def test_weekend_not_soft():
+    assert is_soft(datetime(2026, 6, 20, 12, 0, tzinfo=SYD)) is False
+
+
+def test_snap_out_of_hard_lands_in_buffer():
+    # Mon 10:00 -> nearest hard boundary is 08:59:59 (buffer), closer than 17:00.
+    dt = datetime(2026, 6, 22, 10, 0, tzinfo=SYD)
+    result = snap_out_of_hard(dt)
+    assert result == datetime(2026, 6, 22, 8, 59, 59, tzinfo=SYD)
+    assert in_soft_buffer(result) is True
+
+
+def test_snap_out_of_hard_noop_outside_hard():
+    dt = datetime(2026, 6, 22, 8, 30, tzinfo=SYD)  # buffer, not hard
+    assert snap_out_of_hard(dt) == dt
 
 
 def test_friday_evening_allowed():

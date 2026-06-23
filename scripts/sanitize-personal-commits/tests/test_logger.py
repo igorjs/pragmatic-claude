@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from git_push_guard.logger import log_rewrite
+from sanitize_personal_commits.logger import log_rewrite
 
 SYD = ZoneInfo("Australia/Sydney")
 

@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from pathlib import Path
 
-from git_push_guard.lock import repo_lock
+from sanitize_personal_commits.lock import repo_lock
 
 
 def _hold_lock(lock_path: str, duration: float, result_queue):

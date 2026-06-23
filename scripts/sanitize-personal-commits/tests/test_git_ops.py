@@ -6,11 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from git_push_guard.git_ops import (
+from sanitize_personal_commits.git_ops import (
     NoUpstreamError,
+    RewriteError,
     SigningNotConfiguredError,
     check_signing_configured,
+    create_backup_branch,
     get_local_email,
+    is_pushed,
+    list_all_commits,
     list_unpushed_commits,
     rewrite_dates,
 )
@@ -139,3 +143,76 @@ def test_rewrite_dates_no_op_with_empty_list(tmp_path):
 def test_get_local_email(tmp_path):
     repo = init_repo(tmp_path / "r")
     assert get_local_email(repo) == "me@example.com"
+
+
+def _push(repo: Path):
+    subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
+
+
+def test_list_all_includes_pushed_commits(tmp_path):
+    repo = init_repo(tmp_path / "r")  # init commit is pushed by init_repo
+    make_commit(repo, "a", "2026-06-22T10:00:00+10:00")
+    _push(repo)
+    make_commit(repo, "b", "2026-06-22T10:05:00+10:00")  # unpushed
+
+    assert len(list_unpushed_commits(repo, local_email="me@example.com")) == 1
+    all_commits = list_all_commits(repo, local_email="me@example.com")
+    # init + a + b, in graph order (oldest first)
+    assert len(all_commits) == 3
+    # The unpushed commit "b" is last in the chain.
+    assert all_commits[-1].committer_date == datetime.fromisoformat(
+        "2026-06-22T10:05:00+10:00"
+    )
+
+
+def test_is_pushed_distinguishes_pushed_from_local(tmp_path):
+    repo = init_repo(tmp_path / "r")
+    make_commit(repo, "a", "2026-06-22T10:00:00+10:00")
+    _push(repo)
+    pushed_sha = list_all_commits(repo, local_email="me@example.com")[-1].sha
+    make_commit(repo, "b", "2026-06-22T10:05:00+10:00")
+    local_sha = list_all_commits(repo, local_email="me@example.com")[-1].sha
+
+    assert is_pushed(repo, pushed_sha) is True
+    assert is_pushed(repo, local_sha) is False
+
+
+def test_is_pushed_false_without_upstream(tmp_path):
+    repo = init_repo(tmp_path / "r", with_remote=False)
+    sha = list_all_commits(repo, local_email="me@example.com")[-1].sha
+    assert is_pushed(repo, sha) is False
+
+
+def test_create_backup_branch_points_at_head(tmp_path):
+    repo = init_repo(tmp_path / "r")
+    make_commit(repo, "a")
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    create_backup_branch(repo, "backup/test")
+    backed = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "backup/test"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert backed == head
+
+
+def test_create_backup_branch_rejects_duplicate(tmp_path):
+    repo = init_repo(tmp_path / "r")
+    create_backup_branch(repo, "backup/dup")
+    with pytest.raises(RewriteError):
+        create_backup_branch(repo, "backup/dup")
+
+
+def test_rewrite_dates_full_history_range(tmp_path):
+    repo = init_repo(tmp_path / "r")
+    make_commit(repo, "a", "2026-06-22T10:00:00+10:00")
+    make_commit(repo, "b", "2026-06-22T10:05:00+10:00")
+
+    commits = list_all_commits(repo, local_email="me@example.com")
+    new = datetime.fromisoformat("2026-06-20T19:00:00+10:00")
+    rewrite_dates(repo, [(commits[-1].sha, new)], sign=False, range_expr="HEAD")
+
+    updated = list_all_commits(repo, local_email="me@example.com")
+    assert updated[-1].committer_date == new

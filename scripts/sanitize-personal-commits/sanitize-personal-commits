@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""sanitize-personal-commits: rewrite business-hours commit timestamps before pushing.
+
+By default, scans the history for the earliest commit in a forbidden window and
+rewrites from there to HEAD, whether or not those commits were already pushed
+(force-pushing with lease when they were). Only acts when every commit in the
+rewrite range is the local author's. Backs up the original HEAD to a branch
+first.
+
+Usage: sanitize-personal-commits [--dry-run] [--all] [git push args...]
+
+  --dry-run   show the planned rewrites and push, change nothing
+  --all       rewrite the entire history (root..HEAD), re-signing every commit,
+              instead of only from the first violation
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from sanitize_personal_commits.git_ops import (  # noqa: E402
+    RewriteError,
+    SigningNotConfiguredError,
+    check_signing_configured,
+    create_backup_branch,
+    get_local_email,
+    is_pushed,
+    list_all_commits,
+    rewrite_dates,
+)
+from sanitize_personal_commits.lock import repo_lock  # noqa: E402
+from sanitize_personal_commits.logger import log_rewrite  # noqa: E402
+from sanitize_personal_commits.planner import plan_rewrites  # noqa: E402
+from sanitize_personal_commits.windows import (  # noqa: E402
+    in_soft_buffer,
+    is_forbidden,
+)
+
+LOG_FILE = Path.home() / ".claude" / "logs" / "sanitize-personal-commits.log"
+LOCKS_DIR = Path.home() / ".claude" / "locks"
+
+
+def repo_root() -> Path:
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        print("sanitize-personal-commits: not in a git repo", file=sys.stderr)
+        sys.exit(2)
+    return Path(r.stdout.strip())
+
+
+def lock_path_for(repo: Path) -> Path:
+    h = hashlib.sha256(str(repo).encode()).hexdigest()[:16]
+    return LOCKS_DIR / f"{h}.lock"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--all", action="store_true", dest="all_history",
+                        help="Rewrite the entire history (root..HEAD), re-signing "
+                             "every commit, instead of only from the first violation.")
+    parser.add_argument("--rewrite-only", action="store_true",
+                        help="Rewrite timestamps but do not push.")
+    parser.add_argument("-h", "--help", action="store_true", dest="help_flag")
+    args, push_args = parser.parse_known_args()
+
+    if args.help_flag:
+        print(__doc__)
+        return 0
+
+    repo = repo_root()
+    try:
+        with repo_lock(lock_path_for(repo)):
+            return _run(repo, args.dry_run, args.rewrite_only, args.all_history, push_args)
+    except BlockingIOError:
+        print(
+            "sanitize-personal-commits: another instance is running for this repo",
+            file=sys.stderr,
+        )
+        return 3
+
+
+def _warn_soft_buffer(commits: list, final_by_sha: dict | None = None) -> None:
+    """Warn (do not fail) for own commits whose final timestamp lands in the
+    08:00-09:00 / 17:00-18:00 buffer. Tolerated as DST slack."""
+    final_by_sha = final_by_sha or {}
+    for c in commits:
+        if c.is_merge or c.is_foreign:
+            continue
+        final = final_by_sha.get(c.sha, c.committer_date)
+        if in_soft_buffer(final):
+            print(
+                f"sanitize-personal-commits: WARNING — {c.sha[:10]} sits in the soft "
+                f"buffer ({final.isoformat()}); tolerated (DST slack) but not fully "
+                "outside business hours",
+                file=sys.stderr,
+            )
+
+
+def _do_push(repo: Path, push_args: list, dry_run: bool, force: bool) -> int:
+    args = (["--force-with-lease"] if force else []) + list(push_args)
+    if dry_run:
+        print(f"sanitize-personal-commits: DRY RUN — would run: git push {' '.join(args)}")
+        return 0
+    r = subprocess.run(["git", "-C", str(repo), "push", *args])
+    return r.returncode
+
+
+def _run(repo: Path, dry_run: bool, rewrite_only: bool, all_history: bool,
+         push_args: list) -> int:
+    local_email = get_local_email(repo)
+    commits = list_all_commits(repo, local_email=local_email)
+
+    if not commits:
+        if rewrite_only:
+            return 0
+        return _do_push(repo, push_args, dry_run, force=False)
+
+    # Earliest own (non-merge, non-foreign) commit in a forbidden window.
+    first_idx = next(
+        (
+            i
+            for i, c in enumerate(commits)
+            if not c.is_merge and not c.is_foreign and is_forbidden(c.committer_date)
+        ),
+        None,
+    )
+    if first_idx is None:
+        # No hard violation to rewrite, but still flag any unpushed commits that
+        # touch the tolerated buffer before they go out.
+        _warn_soft_buffer([c for c in commits if not is_pushed(repo, c.sha)])
+        if rewrite_only:
+            return 0
+        return _do_push(repo, push_args, dry_run, force=False)
+
+    # Default: rewrite from the first violation onward. --all: from the root.
+    start_idx = 0 if all_history else first_idx
+    range_commits = commits[start_idx:]
+    start_sha = commits[start_idx].sha
+    is_root = start_idx == 0
+
+    # Only sanitize history that is solely the local author's. A foreign commit
+    # inside the rewrite range would mean force-pushing someone else's work.
+    foreign = [c for c in range_commits if c.is_foreign]
+    if foreign:
+        print(
+            f"sanitize-personal-commits: refusing — {len(foreign)} commit(s) by other "
+            "authors fall inside the rewrite range; sanitizing would force-push history "
+            "that isn't solely yours",
+            file=sys.stderr,
+        )
+        return 7
+
+    try:
+        check_signing_configured(repo)
+    except SigningNotConfiguredError as e:
+        if dry_run:
+            print(
+                f"sanitize-personal-commits: WARNING — signing not configured: {e} "
+                "(would abort if not --dry-run)",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"sanitize-personal-commits: refusing to rewrite — signing not configured: {e}",
+                file=sys.stderr,
+            )
+            return 4
+
+    now = datetime.now().astimezone()
+    try:
+        rewrites = plan_rewrites(range_commits, now=now)
+    except RuntimeError as e:
+        print(f"sanitize-personal-commits: cannot plan rewrites: {e}", file=sys.stderr)
+        return 5
+
+    force = is_pushed(repo, start_sha)
+    range_expr = "HEAD" if is_root else f"{start_sha}^..HEAD"
+
+    branch = (
+        subprocess.run(
+            ["git", "-C", str(repo), "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    orig_by_sha = {c.sha: c for c in range_commits}
+    for sha, new_dt in rewrites:
+        c = orig_by_sha[sha]
+        log_rewrite(
+            LOG_FILE,
+            repo=str(repo),
+            branch=branch,
+            commit=sha,
+            original=c.committer_date,
+            new=new_dt,
+            reason="business-hours rewrite",
+            min_gap_used=0,
+        )
+
+    stamp = now.strftime("%Y%m%d-%H%M%S")
+    backup_name = f"backup/pre-sanitize-{stamp}"
+
+    _warn_soft_buffer(range_commits, dict(rewrites))
+
+    if dry_run:
+        print("sanitize-personal-commits: DRY RUN — planned rewrites:")
+        for sha, new_dt in rewrites:
+            c = orig_by_sha[sha]
+            print(
+                f"  {sha[:10]}  {c.committer_date.isoformat()}  ->  {new_dt.isoformat()}"
+            )
+        print(
+            f"sanitize-personal-commits: DRY RUN — would back up HEAD to {backup_name}, "
+            f"rewrite {range_expr}, then "
+            f"git push {'--force-with-lease ' if force else ''}{' '.join(push_args)}".rstrip()
+        )
+        return 0
+
+    try:
+        create_backup_branch(repo, backup_name)
+    except RewriteError as e:
+        print(f"sanitize-personal-commits: {e}", file=sys.stderr)
+        return 6
+
+    try:
+        rewrite_dates(repo, rewrites, sign=True, range_expr=range_expr)
+    except RewriteError as e:
+        print(f"sanitize-personal-commits: rewrite failed: {e}", file=sys.stderr)
+        return 6
+
+    print(
+        f"sanitize-personal-commits: rewrote {len(rewrites)} commit(s); "
+        f"original HEAD preserved on branch {backup_name}",
+        file=sys.stderr,
+    )
+    # Machine-readable line so the slash command can offer to delete the backup.
+    print(f"BACKUP_BRANCH={backup_name}")
+
+    if rewrite_only:
+        return 0
+    return _do_push(repo, push_args, dry_run, force=force)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

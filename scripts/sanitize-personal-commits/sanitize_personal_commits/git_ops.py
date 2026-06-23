@@ -48,6 +48,17 @@ def get_local_email(repo: Path) -> str:
     return _git(repo, "config", "user.email").stdout.strip()
 
 
+def is_pushed(repo: Path, sha: str) -> bool:
+    """True if `sha` is already an ancestor of the branch's upstream, i.e.
+    rewriting it would require a force-push. False when there is no upstream."""
+    try:
+        upstream = get_upstream(repo)
+    except NoUpstreamError:
+        return False
+    r = _git(repo, "merge-base", "--is-ancestor", sha, upstream, check=False)
+    return r.returncode == 0
+
+
 def _count_lines_changed(repo: Path, sha: str) -> int:
     """Sum of insertions + deletions for a commit, from --shortstat."""
     r = _git(repo, "show", "--shortstat", "--format=", sha, check=False)
@@ -67,10 +78,9 @@ def _count_lines_changed(repo: Path, sha: str) -> int:
     return max(0, total)
 
 
-def list_unpushed_commits(repo: Path, *, local_email: str) -> List[Commit]:
-    upstream = get_upstream(repo)
+def _build_commits(repo: Path, *, local_email: str, range_expr: str) -> List[Commit]:
     fmt = "%H%x00%cI%x00%ae%x00%P"
-    r = _git(repo, "log", "--reverse", f"--pretty={fmt}", f"{upstream}..HEAD")
+    r = _git(repo, "log", "--reverse", f"--pretty={fmt}", range_expr)
     if not r.stdout.strip():
         return []
     out: List[Commit] = []
@@ -91,6 +101,26 @@ def list_unpushed_commits(repo: Path, *, local_email: str) -> List[Commit]:
     return out
 
 
+def list_unpushed_commits(repo: Path, *, local_email: str) -> List[Commit]:
+    upstream = get_upstream(repo)
+    return _build_commits(repo, local_email=local_email, range_expr=f"{upstream}..HEAD")
+
+
+def list_all_commits(repo: Path, *, local_email: str) -> List[Commit]:
+    """Every commit reachable from HEAD, oldest first. Used by --all mode to
+    sanitize already-pushed history when the repo is solely the local author's."""
+    return _build_commits(repo, local_email=local_email, range_expr="HEAD")
+
+
+def create_backup_branch(repo: Path, name: str) -> str:
+    """Point a new branch at current HEAD so the pre-rewrite commits stay
+    reachable (and recoverable) after filter-branch moves the working ref."""
+    r = _git(repo, "branch", name, "HEAD", check=False)
+    if r.returncode != 0:
+        raise RewriteError(f"could not create backup branch {name}: {r.stderr.strip()}")
+    return name
+
+
 def check_signing_configured(repo: Path) -> None:
     r = _git(repo, "config", "--get", "commit.gpgsign", check=False)
     if r.stdout.strip().lower() != "true":
@@ -107,11 +137,15 @@ def rewrite_dates(
     rewrites: List[Tuple[str, datetime]],
     *,
     sign: bool,
+    range_expr: str | None = None,
 ) -> None:
-    """Rewrite committer+author dates for the given SHAs in @{u}..HEAD via filter-branch.
+    """Rewrite committer+author dates for the given SHAs via filter-branch.
 
-    Only commits listed in `rewrites` are modified; others pass through unchanged.
-    If `sign` is True, every commit in the rewritten range is re-signed.
+    `range_expr` bounds the filter-branch rev-list. Defaults to `@{u}..HEAD`
+    (unpushed only); `--all` mode passes `HEAD` to rewrite the full history.
+    Only commits listed in `rewrites` are modified; others pass through
+    unchanged. If `sign` is True, every commit in the rewritten range is
+    re-signed.
     """
     if not rewrites:
         return
@@ -132,8 +166,9 @@ def rewrite_dates(
     if sign:
         cmd.extend(["--commit-filter", 'git commit-tree -S "$@"'])
 
-    upstream = get_upstream(repo)
-    cmd.append(f"{upstream}..HEAD")
+    if range_expr is None:
+        range_expr = f"{get_upstream(repo)}..HEAD"
+    cmd.append(range_expr)
 
     env = {**os.environ, "FILTER_BRANCH_SQUELCH_WARNING": "1"}
     r = subprocess.run(cmd, capture_output=True, text=True, env=env)

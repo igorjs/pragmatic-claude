@@ -5,7 +5,15 @@ from datetime import datetime, timedelta
 from random import Random
 from typing import List, Optional, Tuple
 
-from .windows import is_forbidden, snap_to_nearest_allowed, _next_allowed_instant
+from .windows import (
+    HARD_END_HOUR,
+    _next_allowed_instant,
+    _next_instant,
+    is_forbidden,
+    is_soft,
+    snap_out_of_hard,
+    snap_to_nearest_allowed,
+)
 
 MIN_GAP_BASE = 30        # seconds floor
 MIN_GAP_PER_LINE = 0.5
@@ -29,6 +37,56 @@ def _min_gap(lines_changed: int) -> float:
     return min(MIN_GAP_BASE + lines_changed * MIN_GAP_PER_LINE, MIN_GAP_CAP)
 
 
+def _try_place(
+    *,
+    desired: datetime,
+    last_new: Optional[datetime],
+    min_gap: float,
+    now: datetime,
+    avoid_soft: bool,
+) -> Optional[datetime]:
+    """One placement attempt against a single avoid-region.
+
+    avoid_soft=True keeps the timestamp fully outside the soft window
+    (08:00-18:00) — the preferred result. avoid_soft=False only keeps it out of
+    the hard window (09:00-17:00), so it may land in the tolerated buffer.
+    Returns None if no candidate satisfies spacing + non-future for this region.
+    """
+    deadline = now - timedelta(seconds=FUTURE_SAFETY_BUFFER)
+    min_required = (
+        last_new + timedelta(seconds=min_gap) if last_new is not None else None
+    )
+
+    if avoid_soft:
+        in_region = is_soft
+        snap = snap_to_nearest_allowed
+        forward = _next_allowed_instant
+    else:
+        in_region = is_forbidden
+        snap = snap_out_of_hard
+        forward = lambda dt: _next_instant(dt, HARD_END_HOUR)  # noqa: E731
+
+    candidates = []
+    c1 = snap(desired) if in_region(desired) else desired
+    candidates.append(c1)
+    if min_required is not None:
+        c2 = min_required
+        if in_region(c2):
+            # When enforcing spacing, only go forward — backward violates ordering.
+            c2 = forward(c2)
+        candidates.append(c2)
+
+    for cand in candidates:
+        if in_region(cand):
+            continue
+        if min_required is not None and cand < min_required:
+            continue
+        if cand > deadline:
+            continue
+        return cand
+    return None
+
+
 def _place_commit(
     *,
     desired: datetime,
@@ -37,30 +95,19 @@ def _place_commit(
     now: datetime,
     sha: str,
 ) -> datetime:
-    """Find a timestamp satisfying: allowed-window, >= last_new+min_gap, <= now-buffer."""
-    deadline = now - timedelta(seconds=FUTURE_SAFETY_BUFFER)
-    min_required = (
-        last_new + timedelta(seconds=min_gap) if last_new is not None else None
-    )
-
-    candidates = []
-    c1 = snap_to_nearest_allowed(desired) if is_forbidden(desired) else desired
-    candidates.append(c1)
-    if min_required is not None:
-        c2 = min_required
-        if is_forbidden(c2):
-            # When enforcing spacing, only go forward — backward violates ordering.
-            c2 = _next_allowed_instant(c2)
-        candidates.append(c2)
-
-    for cand in candidates:
-        if is_forbidden(cand):
-            continue
-        if min_required is not None and cand < min_required:
-            continue
-        if cand > deadline:
-            continue
-        return cand
+    """Place a timestamp outside the hard window, preferring fully outside the
+    soft window and only dipping into the 08:00-09:00 / 17:00-18:00 buffer when
+    no soft-clean slot fits."""
+    for avoid_soft in (True, False):
+        placed = _try_place(
+            desired=desired,
+            last_new=last_new,
+            min_gap=min_gap,
+            now=now,
+            avoid_soft=avoid_soft,
+        )
+        if placed is not None:
+            return placed
 
     raise RuntimeError(
         "commit %s: cannot place timestamp (last_new=%s, min_gap=%ss, now=%s); "
@@ -75,14 +122,18 @@ def _apply_jitter(
     now: datetime,
     rng: Random,
 ) -> datetime:
-    """Add ±jitter, keeping allowed-window + spacing + non-future constraints."""
+    """Add ±jitter, keeping outside-soft + spacing + non-future constraints.
+
+    Jitter avoids the soft window so it never nudges a clean placement into the
+    buffer; for a placement already in the buffer it simply finds no candidate
+    and leaves the timestamp unchanged."""
     for attempt in range(JITTER_RETRIES):
         sign = rng.choice([-1, 1])
         # Magnitude shrinks with each retry
         scale = 1.0 - (attempt * 0.3)
         magnitude = rng.uniform(JITTER_LO, JITTER_HI) * min_gap * scale
         candidate = new_dt + timedelta(seconds=sign * magnitude)
-        if is_forbidden(candidate):
+        if is_soft(candidate):
             continue
         if last_new is not None and (candidate - last_new).total_seconds() < min_gap / 2:
             continue

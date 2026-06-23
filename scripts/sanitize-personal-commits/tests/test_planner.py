@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from git_push_guard.planner import Commit, plan_rewrites
+from sanitize_personal_commits.planner import Commit, plan_rewrites
 
 SYD = ZoneInfo("Australia/Sydney")
 
@@ -117,6 +117,31 @@ def test_resulting_timestamps_are_in_allowed_windows():
     ]
     now = datetime(2026, 6, 22, 22, 0, tzinfo=SYD)
     result = plan_rewrites(commits, now=now, rng_seed=7)
-    from git_push_guard.windows import is_forbidden
+    from sanitize_personal_commits.windows import is_forbidden
     for sha, dt in result:
         assert not is_forbidden(dt), f"{sha} ended in forbidden window: {dt}"
+
+
+def test_prefers_outside_soft_window():
+    # With ample room (evening now), a hard-window commit should land fully
+    # outside the soft window, not merely in the 08-09 / 17-18 buffer.
+    commits = [C("a", datetime(2026, 6, 22, 12, 0, tzinfo=SYD), lines=5)]
+    now = datetime(2026, 6, 22, 22, 0, tzinfo=SYD)
+    (sha, new_dt) = plan_rewrites(commits, now=now, rng_seed=3)[0]
+    from sanitize_personal_commits.windows import is_soft
+    assert not is_soft(new_dt)
+
+
+def test_buffer_fallback_when_no_soft_slot_fits():
+    # A foreign anchor at 16:40 forces the next commit forward; with now=17:30
+    # there is no soft-clean slot (18:00 is in the future), so the planner falls
+    # back to the tolerated buffer rather than failing — but never the hard core.
+    anchor = C("anchor", datetime(2026, 6, 22, 16, 40, tzinfo=SYD), is_foreign=True)
+    b = C("b", datetime(2026, 6, 22, 16, 41, tzinfo=SYD), lines=10)
+    now = datetime(2026, 6, 22, 17, 30, tzinfo=SYD)
+    result = plan_rewrites([anchor, b], now=now, rng_seed=1)
+    assert len(result) == 1
+    sha, new_dt = result[0]
+    from sanitize_personal_commits.windows import in_soft_buffer, is_forbidden
+    assert not is_forbidden(new_dt)
+    assert in_soft_buffer(new_dt)

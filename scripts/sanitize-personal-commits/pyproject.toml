@@ -1,5 +1,5 @@
 [project]
-name = "git-push-guard"
+name = "sanitize-personal-commits"
 version = "0.1.0"
 description = "Rewrite unpushed git commit timestamps that fall in business hours."
 requires-python = ">=3.9"
