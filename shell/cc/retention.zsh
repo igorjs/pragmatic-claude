@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: Apache-2.0
 # cc module: retention (bound disk)
 #
 # Keep only the newest $CCD_KEEP transcripts (default 5) for the current

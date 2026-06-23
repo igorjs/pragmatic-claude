@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: Apache-2.0
 # Claude Code launcher — drop-in replacement for ~/.zshrc's _claude that adds
 # subcommand dispatch (clean / fresh / raw / list) while preserving the original
 # resume-by-customTitle default behavior.
