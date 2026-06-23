@@ -84,20 +84,38 @@ def _place_backward(
             if not region(t):
                 return t
             # In the avoided region: jump to before this day's window start and
-            # land at a random point in the previous off-hours stretch.
+            # land at a random point in the previous off-hours stretch — but never
+            # at or below the floor. A nearby floor (e.g. a same-day parent) would
+            # otherwise be overshot by the full night-scatter jump, discarding a
+            # tier that still has a valid slot in the gap just above the floor.
             day_start = _next_instant(t, day_start_hour)  # HH:00 on t's local day
-            t = day_start - timedelta(seconds=rng.uniform(60, NIGHT_SCATTER_SEC))
+            earliest = day_start - timedelta(seconds=NIGHT_SCATTER_SEC)
+            if floor is not None and earliest <= floor:
+                earliest = floor + timedelta(seconds=1)
+            if earliest >= day_start:
+                break  # no off-hours room above the floor before this window
+            max_back = (day_start - earliest).total_seconds()
+            t = day_start - timedelta(seconds=rng.uniform(min(60.0, max_back), max_back))
     raise RuntimeError(
         "commit %s: cannot place timestamp (upper=%s, floor=%s, min_gap=%ss); "
         "no valid slot before the previous anchor" % (sha, upper, floor, min_gap)
     )
 
 
-def _anchor_floors(commits: List[Commit]) -> List[Optional[datetime]]:
-    """For each commit, the timestamp of the nearest *older* anchor (merge or
-    foreign commit) preceding it. Own commits may never be dated before it."""
+def _anchor_floors(
+    commits: List[Commit], base_floor: Optional[datetime] = None
+) -> List[Optional[datetime]]:
+    """For each commit, the timestamp of the nearest *older* anchor preceding it;
+    own commits may never be dated at or before it.
+
+    ``base_floor`` is the committer date of the commit immediately *before* the
+    range (the parent of ``commits[0]``). When the range is trimmed to start at
+    the first violation, that parent is a real commit not present in ``commits``;
+    seeding it here keeps the oldest rewrite strictly after its parent instead of
+    walking backward past it. Merge and foreign commits inside the range raise the
+    floor further as usual."""
     floors: List[Optional[datetime]] = []
-    last_anchor: Optional[datetime] = None
+    last_anchor: Optional[datetime] = base_floor
     for c in commits:
         floors.append(last_anchor)
         if c.is_merge or c.is_foreign:
@@ -110,12 +128,18 @@ def plan_rewrites(
     *,
     now: datetime,
     rng_seed: Optional[int] = None,
+    base_floor: Optional[datetime] = None,
 ) -> List[Tuple[str, datetime]]:
     """Plan timestamp rewrites for commits in forbidden windows.
 
     ``commits`` must be in chronological order (oldest first). Returns
     (sha, new_timestamp) pairs only for commits whose date actually changes.
     Merge and foreign commits are never rewritten but act as ordering anchors.
+
+    ``base_floor`` is the committer date of the parent of ``commits[0]`` (the
+    commit just before the range). Pass it whenever the range is trimmed so the
+    oldest rewrite stays strictly after its real parent rather than walking back
+    past it.
 
     Placement runs newest -> oldest, scattering each moved commit into a random
     off-hours slot before the one after it. Commits already outside the hard
@@ -132,7 +156,7 @@ def plan_rewrites(
         return []
 
     ceiling = now - timedelta(seconds=FUTURE_SAFETY_BUFFER)
-    floors = _anchor_floors(commits)
+    floors = _anchor_floors(commits, base_floor)
 
     new_by_idx: Dict[int, datetime] = {}
     later_placed: Optional[datetime] = None  # time of the next-newer placed commit/anchor

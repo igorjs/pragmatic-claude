@@ -183,6 +183,37 @@ def test_prefers_outside_soft_window():
     assert not is_soft(new_dt)
 
 
+def test_oldest_commit_not_dated_before_out_of_range_parent():
+    # Regression: the rewrite range begins at the first violation, so the parent
+    # commit (a healthy commit just before the range) is not in `commits`. Without
+    # a base floor the backward walk jumps past it, dating the child before its
+    # parent and inverting chronological order. The parent's timestamp must bound
+    # the placement from below.
+    parent = datetime(2026, 6, 24, 6, 45, tzinfo=SYD)  # Wed early morning, clean
+    commits = [C("v", datetime(2026, 6, 24, 13, 43, tzinfo=SYD), lines=20)]
+    now = datetime(2026, 6, 24, 13, 50, tzinfo=SYD)
+    result = plan_rewrites(commits, now=now, rng_seed=1, base_floor=parent)
+    assert len(result) == 1
+    _, new_dt = result[0]
+    assert new_dt > parent, f"placed {new_dt} before parent {parent}"
+    assert not is_forbidden(new_dt)
+
+
+def test_base_floor_bounds_every_placement():
+    # The base floor acts like an anchor for the whole run: every rewritten commit
+    # must land strictly after it, and chronological order is preserved.
+    parent = datetime(2026, 6, 24, 6, 45, tzinfo=SYD)
+    commits = [
+        C("a", datetime(2026, 6, 24, 10, 0, tzinfo=SYD), lines=10),
+        C("b", datetime(2026, 6, 24, 11, 0, tzinfo=SYD), lines=10),
+    ]
+    now = datetime(2026, 6, 24, 13, 0, tzinfo=SYD)
+    result = plan_rewrites(commits, now=now, rng_seed=1, base_floor=parent)
+    placed = [dt for _, dt in result]
+    assert all(dt > parent for dt in placed), f"some placement <= parent: {placed}"
+    assert placed == sorted(placed), "chronological order not preserved"
+
+
 def test_buffer_fallback_when_no_soft_slot_fits():
     # A foreign anchor at 16:40 forces the next commit forward; with now=17:30
     # there is no soft-clean slot (18:00 is in the future), so the planner falls

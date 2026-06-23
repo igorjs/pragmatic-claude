@@ -226,6 +226,10 @@ def _build_plan(repo: Path, *, all_history: bool, squash: bool, rewrite_only: bo
     range_commits = commits[start_idx:]
     start_sha = commits[start_idx].sha
     is_root = start_idx == 0
+    # The parent of the range's first commit is not in `range_commits` when the
+    # range is trimmed to the first violation. Its committer date floors the oldest
+    # rewrite so a moved commit never predates its own parent (chronology inversion).
+    base_floor = None if is_root else commits[start_idx - 1].committer_date
 
     foreign = [c for c in range_commits if c.is_foreign]
     if foreign:
@@ -294,7 +298,7 @@ def _build_plan(repo: Path, *, all_history: bool, squash: bool, rewrite_only: bo
         return Plan(mode="squash", squash=squash_list, messages=messages, **common), 0, None
 
     try:
-        rewrites = plan_rewrites(range_commits, now=now, rng_seed=seed)
+        rewrites = plan_rewrites(range_commits, now=now, rng_seed=seed, base_floor=base_floor)
     except RuntimeError as e:
         return None, 5, f"cannot plan rewrites: {e}"
     rew_list = [[sha, dt.isoformat()] for sha, dt in rewrites]
