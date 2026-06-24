@@ -8,7 +8,7 @@ effort: xhigh
 
 # Scope: Interactive Design Interview
 
-Interview the user relentlessly about every aspect of this plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one by one. The output is a verified, self-contained implementation plan, ready to implement (today via the `superpowers:executing-plans` skill, or by handing the plan file to a fresh implementation session).
+Interview the user relentlessly about every aspect of this plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one by one. The output is a verified, self-contained implementation plan, ready to run with `/implement` (or the `superpowers:executing-plans` skill while it's in use).
 
 Invoked as `/scope`. The remaining arguments are an optional topic seed or file path.
 
@@ -32,8 +32,8 @@ ARGUMENTS:
 Asks one question at a time with a recommended answer. Explores the codebase
 and the project's .claude/memory/ (+ graph.json from /learn-project) to answer
 questions itself before asking you. Walks decision trees, runs a 3-phase
-quality gate, and produces a verified, self-contained plan you can implement with your
-flow of choice (today, the superpowers:executing-plans skill).
+quality gate, and produces a verified, self-contained plan you can run with
+/implement (or the superpowers:executing-plans skill).
 ```
 
 ## Core Rules (MUST)
@@ -124,7 +124,7 @@ Ask: **"Does this capture everything? Anything to change?"** Do NOT proceed unti
 
 ### Step 4: Generate Implementation Plan
 
-Produce a self-contained plan any implementation flow can consume directly (e.g. the `superpowers:executing-plans` skill while it's in use):
+Produce a self-contained plan that `/implement` (or the `superpowers:executing-plans` skill) can consume directly:
 
 ```
 ## Implementation Plan
@@ -232,7 +232,7 @@ Then:
 2. Persist the plan's accepted key decisions as project memory facts (`type: project`, `anchors:` to the files they touch), update `MEMORY.md`, then refresh the graph with `/learn-project --graph-only`.
 3. Tell the user:
    - "Saved to `.claude/plans/<topic-slug>.md`"
-   - "Implement it when ready (today via the `superpowers:executing-plans` skill, or hand the plan file to a fresh session)."
+   - "Implement it when ready: `/implement .claude/plans/<topic-slug>.md` (or the `superpowers:executing-plans` skill)."
    - "Want to capture the key decisions in an ADR (`/adr`)?" (if architectural)
 
 ## Adapting to Complexity

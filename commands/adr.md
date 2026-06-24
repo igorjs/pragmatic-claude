@@ -227,4 +227,4 @@ Lowercase all words, replace spaces and special characters with hyphens, collaps
 
 ## Implementing the Blueprint
 
-The blueprint is a self-contained implementation plan. Implement it with your flow of choice: today via the `superpowers:executing-plans` skill, or by handing `{DIR}/{base}-blueprint.md` to a fresh implementation session.
+The blueprint is a self-contained implementation plan. Implement it with `/implement {DIR}/{base}-blueprint.md` (or the `superpowers:executing-plans` skill while it's in use).
