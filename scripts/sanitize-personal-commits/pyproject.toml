@@ -1,10 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sanitize-personal-commits"
 version = "0.1.0"
 description = "Rewrite unpushed git commit timestamps that fall in business hours."
 requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
