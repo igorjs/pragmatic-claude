@@ -59,6 +59,7 @@
 # Function definitions are lazy, so module order only needs all of them loaded
 # before cc/ccd run. bust-cache lives one level up (reusable independently).
 source "$HOME/.claude/shell/bust-cache.zsh"
+source "$HOME/.claude/shell/worktree.zsh"
 for _cc_mod in config-drift retention sessions clean-resume dispatch; do
     source "$HOME/.claude/shell/cc/$_cc_mod.zsh"
 done
