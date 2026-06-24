@@ -84,6 +84,17 @@ _claude() {
             _cc_list_sessions "$project_dir"
             return $?
             ;;
+        worktree|--worktree)
+            shift
+            # cc/ccd worktree <branch>: create or enter a git worktree (off the
+            # project's base branch for a new branch), then launch a session in
+            # it. This path always passes --ai-resolve, so Claude resolves any
+            # rebase conflicts. worktree() cd's us into the new tree; recursing
+            # into _claude with just the leading flags does the normal launch.
+            worktree --ai-resolve "$@" || return $?
+            _claude "${flags[@]}"
+            return $?
+            ;;
     esac
 
     # ── Default: replicate the original _claude behavior ──
