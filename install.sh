@@ -127,7 +127,11 @@ shopt -u dotglob nullglob
 if [ "$SKIP_DEPS" -eq 0 ]; then
     if command -v brew >/dev/null 2>&1; then
         log "Installing dependencies (brew bundle)"
-        brew bundle --file "$CLAUDE_HOME/Brewfile" || warn "brew bundle reported errors"
+        # </dev/null is required: when this script is run via `curl ... | bash`,
+        # the script itself arrives on stdin. brew reads stdin and would consume
+        # the rest of the script, so setup steps after this would silently never
+        # run. Redirecting keeps brew off the script stream.
+        brew bundle --file "$CLAUDE_HOME/Brewfile" </dev/null || warn "brew bundle reported errors"
     else
         warn "Homebrew not found; skipping deps. See https://brew.sh, then: brew bundle --file $CLAUDE_HOME/Brewfile"
     fi
@@ -140,7 +144,7 @@ if [ "$SKIP_VENV" -eq 0 ]; then
             cd "$CLAUDE_HOME/scripts/sanitize-personal-commits" &&
             python3 -m venv .venv &&
             .venv/bin/pip install -q -e .
-        ) || warn "venv setup failed; create it manually if you need the sanitize tool"
+        ) </dev/null || warn "venv setup failed; create it manually if you need the sanitize tool"
     else
         warn "python3 not found; skipping venv"
     fi
