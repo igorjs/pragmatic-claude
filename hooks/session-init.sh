@@ -42,22 +42,50 @@ config_hash() {
 hash_file="$dir/config-hash"
 current_hash="$(config_hash)"
 
+# Accumulate any SessionStart output; emit a single payload at the end.
+system_message=""
+extra_context=""
+
 if [[ "$source" == "resume" && -n "$current_hash" ]]; then
   prev_hash="$(cat "$hash_file" 2>/dev/null)"
   if [[ -n "$prev_hash" && "$prev_hash" != "$current_hash" ]]; then
-    user_msg="⚠ Claude config (settings.json + hooks) has drifted since this session was created. Plugins, output style, model default, and new hooks will NOT take effect on this resumed session — they're frozen at the original startup snapshot. To apply current config: exit and run \`cc fresh\` (or \`claude\` without --resume)."
-    claude_msg="The user resumed this session, but the config hash has changed since session creation. The harness has the OLD settings loaded. If the user asks about why a recent settings change isn't showing up, point them to 'cc fresh' or starting a new \`claude\` invocation."
-    jq -cn --arg um "$user_msg" --arg cm "$claude_msg" '
-      { systemMessage: $um,
-        hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: $cm } }
-    '
-    # Continue — don't return, so we can still log the hash for the next compare.
+    system_message="⚠ Claude config (settings.json + hooks) has drifted since this session was created. Plugins, output style, model default, and new hooks will NOT take effect on this resumed session — they're frozen at the original startup snapshot. To apply current config: exit and run \`cc fresh\` (or \`claude\` without --resume)."
+    extra_context="The user resumed this session, but the config hash has changed since session creation. The harness has the OLD settings loaded. If the user asks about why a recent settings change isn't showing up, point them to 'cc fresh' or starting a new \`claude\` invocation."
   fi
 fi
 
 # Always refresh the stored hash on startup (the new baseline going forward).
 [[ -n "$current_hash" && "$source" == "startup" ]] && \
   printf '%s' "$current_hash" > "$hash_file" 2>/dev/null
+
+# ── Per-project memory ──
+# Project memory lives in <repo-root>/.claude/memory/, kept out of git via
+# .git/info/exclude. Inject the index lines only; fact bodies are read on
+# demand. No-op outside a git repo or when the repo has no project memory.
+_repo_root="$(git --no-optional-locks rev-parse --show-toplevel 2>/dev/null)"
+_mem_index="$_repo_root/.claude/memory/MEMORY.md"
+if [[ -n "$_repo_root" && -f "$_mem_index" ]]; then
+  _mem_body="$(head -c 16000 "$_mem_index" 2>/dev/null)"
+  if [[ -n "$_mem_body" ]]; then
+    _mem_ctx="Project memory for this repo ($(basename "$_repo_root")), stored locally at $_repo_root/.claude/memory/. These facts apply only in this repo; read the referenced fact files on demand. Index:
+$_mem_body"
+    if [[ -n "$extra_context" ]]; then
+      extra_context="$extra_context
+
+$_mem_ctx"
+    else
+      extra_context="$_mem_ctx"
+    fi
+  fi
+fi
+
+# Emit a single SessionStart payload if there is anything to say.
+if [[ -n "$system_message" || -n "$extra_context" ]]; then
+  jq -cn --arg um "$system_message" --arg cm "$extra_context" '
+    ( (if $um != "" then { systemMessage: $um } else {} end)
+      + (if $cm != "" then { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: $cm } } else {} end) )
+  '
+fi
 
 # NOTE: crash-recovery warning removed. `ccd` restores the most recent session
 # per directory, so the "did not end cleanly" warning was redundant, and it
