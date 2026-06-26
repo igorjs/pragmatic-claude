@@ -148,8 +148,12 @@ scenario_d() {
   git -C "$repo" push -q "$bare" "HEAD:refs/heads/pr7-v2" 2>/dev/null || true
   git -C "$bare" update-ref refs/pull/7/head "$new_sha"
 
-  # Create a real worktree for the old SHA, then lock it with a stale timestamp
-  local stale_path="${repo}-stale-wt"
+  # Create the stale worktree under ${ROOT}/review-worktrees/ so the sweep
+  # prefix guard matches it — path must be under that directory.
+  local ROOT
+  ROOT="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"
+  mkdir -p "${ROOT}/review-worktrees"
+  local stale_path="${ROOT}/review-worktrees/7-${sha:0:7}"
   git -C "$repo" worktree add --detach -q "$stale_path" "$sha"
   local stale_ts
   stale_ts=$(( $(date +%s) - 15 ))
@@ -166,8 +170,6 @@ scenario_d() {
   git -C "$repo" worktree list --porcelain | grep -q "^worktree $stale_path$" \
     && { echo "  stale worktree still present after sweep"; return 1; } || true
 
-  # shellcheck disable=SC2064
-  trap "rm -rf \"$repo\" \"$bare\" \"$stale_path\"" EXIT INT TERM
 }
 
 # ---------------------------------------------------------------------------

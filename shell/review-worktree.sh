@@ -80,8 +80,12 @@ cmd_setup() {
   # Sweep stale linked worktrees
   _sweep_stale_worktrees "$ROOT"
 
-  # Fetch PR head ref
-  local fetch_url="${GH_FETCH_URL:-$(gh repo view --json url -q .url)}"
+  # Fetch PR head ref — resolve URL via gh when GH_FETCH_URL is not set
+  local fetch_url="${GH_FETCH_URL:-}"
+  if [[ -z "$fetch_url" ]]; then
+    fetch_url="$(gh repo view --json url -q .url)" \
+      || _die "failed to resolve repo URL via gh (not authenticated or not a GitHub repo)"
+  fi
   git fetch "$fetch_url" "refs/pull/${pr}/head" \
     || _die "failed to fetch refs/pull/${pr}/head"
 

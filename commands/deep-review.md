@@ -85,7 +85,6 @@ Invoke the `grounding-review` and `writing-style` skills before drafting any fin
 
 ```bash
 ARGS="$ARGUMENTS"
-FLAGS=$(echo "$ARGS" | grep -oE '\-\-[a-z]+( [a-z]+)?')   # for reference; parse flags from $ARGUMENTS
 PR_ARG=$(echo "$ARGS" | tr ' ' '\n' | grep -E '^#?[0-9]+$' | head -1 | tr -d '#')
 
 if [[ -n "$PR_ARG" ]]; then
@@ -170,9 +169,12 @@ elif [[ -f Cargo.toml ]]; then
 else
   CHECK_OUTPUT="[no recognised toolchain; checks skipped]"
 fi
+
+# Print so the orchestrating session can read it and embed it in subagent prompts
+printf '%s\n' "$CHECK_OUTPUT"
 ```
 
-If install or run fails, log the error in `CHECK_OUTPUT` and continue: never block the review. Subagent prompts in Step 3 will include this output.
+If install or run fails, log the error in `CHECK_OUTPUT` and continue: never block the review. The `printf` at the end makes the output visible in the tool result so Step 3 can embed it verbatim in each subagent prompt.
 
 ## Step 3: Spawn the reviewer swarm (parallel Task subagents)
 
