@@ -59,9 +59,10 @@ _sweep_stale_worktrees() {
 
     if $stale; then
       git worktree remove -f -f "$wt_path" 2>/dev/null || true
-      git worktree prune
     fi
   done
+  # Prune orphaned admin entries once after the sweep, not per-removal
+  git worktree prune
 }
 
 cmd_setup() {
