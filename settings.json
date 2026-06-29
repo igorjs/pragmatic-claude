@@ -227,6 +227,7 @@
   "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "stable",
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": false,
   "theme": "dark-daltonized",
   "editorMode": "normal",
@@ -244,5 +245,5 @@
     ]
   },
   "voiceEnabled": false,
-  "tui": "fullscreen"
+  "model": "sonnet"
 }
