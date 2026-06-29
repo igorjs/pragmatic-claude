@@ -162,6 +162,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/post-edit-track.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/bin/rebuild-memory-graph.sh"
           }
         ]
       }
