@@ -165,7 +165,7 @@
           },
           {
             "type": "command",
-            "command": "~/.claude/bin/rebuild-memory-graph.sh"
+            "command": "~/.claude/hooks/rebuild-memory-graph.sh"
           }
         ]
       }
