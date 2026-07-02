@@ -30,7 +30,7 @@ RTK (Rust Token Killer) is active: rewrites commands via PreToolUse hook, 0 over
 
 **Verify, don't guess**: Before recommending, you MUST verify empirically rather than guess.
 
-**Self-review**: Confirm before destructive actions. Never `--no-verify` or force-push to shared branches. Commit/push only when asked. After implementing a software solution, always do a second pass to self-review your changes. You MUST be ruthless and pedantic when self-reviewing your work.
+**Self-review**: Confirm before destructive actions. Never `--no-verify` or force-push to shared branches. When git signing is configured (`gpg.format` + `user.signingkey`), every commit and tag uses `--gpg-sign` and every commit adds `--signoff` (the `Signed-off-by` trailer); never `--no-gpg-sign`. Commit/push only when asked. After implementing a software solution, always do a second pass to self-review your changes. You MUST be ruthless and pedantic when self-reviewing your work.
 
 **Engineering standards**: when working on a pull request, planning a testing approach, or deploying, invoke the `engineering-standards` skill. It carries the team's PR readiness and size limits, review-comment conventions, testing requirements and mocking rules, incremental delivery, and deployment flow.
 
