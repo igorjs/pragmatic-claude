@@ -178,9 +178,9 @@ Ticket: <id and link, if ticket mode; omit otherwise>
 
 ## Confidence + open items
 
-- Confidence: HIGH | MEDIUM | LOW — <one line on what makes it that>
+- Confidence: HIGH | MEDIUM | LOW, <one line on what makes it that>
 - Open items (verify downstream):
-  - <blind spot or LOW-confidence premise> — <who verifies: /scope interview, /implement watch>
+  - <blind spot or LOW-confidence premise>, <who verifies: /scope interview, /implement watch>
 ```
 
 Save the file. Don't auto-commit.

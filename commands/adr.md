@@ -181,9 +181,9 @@ After the record is approved, write `{DIR}/{base}-blueprint.md` (`{base}` = file
 
 ## Confidence + open items
 
-- Confidence: HIGH | MEDIUM | LOW — <one line on what makes it that>
+- Confidence: HIGH | MEDIUM | LOW, <one line on what makes it that>
 - Open items (verify downstream):
-  - <blind spot or LOW-confidence premise> — <who verifies: /scope interview, /implement watch>
+  - <blind spot or LOW-confidence premise>, <who verifies: /scope interview, /implement watch>
 ```
 
 Requirements: each work unit independently verifiable and committable as one small unit; file plans reference real existing paths; verification commands are literal (no placeholders); the Ordering table shows each WU's `Requires` and `Parallel group`; the test plan follows `engineering-standards`. Mark a shared `Parallel group` only when its members have no dependency on each other, touch disjoint files, and share no mutable state or ordering-sensitive step; otherwise leave them sequential. `/implement` consumes this blueprint exactly like a `/scope` plan: one small commit per WU, parallel-safe WUs dispatched to concurrent agents.
@@ -198,6 +198,7 @@ After the user approves all drafts, run the three-phase gate before finalising. 
 
 Spawn an **Explore** agent (`subagent_type: Explore`) with the record (and blueprint, if any), working under the `grounding-research` discipline (cite `file:line`, tag `[unverified]`). It verifies: file paths in the system snapshot and file plans exist; function/type signatures referenced are accurate; the plan is consistent with existing patterns; the work unit dependency graph is acyclic and each Parallel group's WUs have disjoint files with no dependency on each other; if a memory store was loaded in Stage 1, known gotchas related to the topic are accounted for. Returns a PASS/FAIL/WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
 
+```markdown
 ## Verification Summary
 
 | Referenced path | Confirmed? | Where used |
@@ -205,6 +206,7 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the record (and bluep
 | <path> | Yes (Read) / No (not found) | WU-N |
 
 Confidence: HIGH | MEDIUM | LOW
+```
 
 After it returns, if a project memory store is present at `.claude/memory/`, persist any durable gotcha as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
 
@@ -237,7 +239,7 @@ Present the result. FAILs block finalisation; WARNs are informational. If the us
 [or: BLOCKED: N FAILs, M WARNs]
 ```
 
-- **INCONCLUSIVE** — a phase returns INCONCLUSIVE, not PASS, when it couldn't actually perform its check: the agent failed to run or returned nothing, the target files were unreadable, or its confidence is LOW and blind spots dominate so a PASS would be unsupported. INCONCLUSIVE blocks finalise exactly like FAIL and re-runs on the same max-3 loop; it's labeled distinctly so the cause reads as "couldn't verify," not "found a problem." A gate that checked nothing MUST NOT read PASS.
+- **INCONCLUSIVE**: a phase returns INCONCLUSIVE, not PASS, when it couldn't actually perform its check: the agent failed to run or returned nothing, the target files were unreadable, or its confidence is LOW and blind spots dominate so a PASS would be unsupported. INCONCLUSIVE blocks finalise exactly like FAIL and re-runs on the same max-3 loop; it's labeled distinctly so the cause reads as "couldn't verify," not "found a problem." A gate that checked nothing MUST NOT read PASS.
 
 ## Stage 4: Finalise
 
