@@ -21,6 +21,6 @@ _cc_bust_cache() {
     # Plugin catalog cache can hold a stale compiled plugin list.
     rm -f "$claude_dir/plugins/plugin-catalog-cache.json"(N) 2>/dev/null
 
-    # Backups dir — keep clean.
+    # Backups dir: keep clean.
     rm -f "$claude_dir"/backups/*(N) 2>/dev/null
 }

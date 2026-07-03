@@ -1,15 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
-# Claude Code launcher — drop-in replacement for ~/.zshrc's _claude that adds
+# Claude Code launcher: drop-in replacement for ~/.zshrc's _claude that adds
 # subcommand dispatch (clean / fresh / raw / list) while preserving the original
 # resume-by-customTitle default behavior.
 #
-# Plays nice with your existing cc() and ccd() wrappers — they call _claude
+# Plays nice with your existing cc() and ccd() wrappers; they call _claude
 # unchanged; this file just redefines _claude with extra capabilities.
 #
 # Subcommands (works under both cc and ccd):
 #
-#   cc                Default — resume the most recent session for $PWD whose
+#   cc                Default: resume the most recent session for $PWD whose
 #                     customTitle matches the directory name. If none found,
 #                     start fresh with that name. (Identical to your original.)
 #
@@ -25,13 +25,13 @@
 #                     settings rewrites or when you want zero conversation
 #                     baggage.
 #
-#   cc raw [sid]      Resume verbatim — no fork, no clean, preserves the
+#   cc raw [sid]      Resume verbatim: no fork, no clean, preserves the
 #                     original UUID and all frozen overrides. Defaults to the
 #                     latest matching session if sid omitted.
 #
 #   cc list           Show recent sessions for $PWD with timestamps + titles.
 #
-#   ccd <any of the above> — same dispatch, with --dangerously-skip-permissions.
+#   ccd <any of the above>: same dispatch, with --dangerously-skip-permissions.
 #
 # Default-path extras:
 #   - Auto-fork on config drift: if settings.json or any hook changed since this

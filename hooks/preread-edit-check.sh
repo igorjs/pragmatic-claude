@@ -35,7 +35,7 @@ elif [[ $delta -lt 3600 ]]; then ago="$((delta / 60))m ago"
 else                              ago="$((delta / 3600))h ago"
 fi
 
-msg="You edited this file ${ago} via Edit/Write. Your context already reflects the post-edit state — re-reading it now is wasted tokens unless you suspect external modifications. Skip the Read and proceed."
+msg="You edited this file ${ago} via Edit/Write. Your context already reflects the post-edit state. Re-reading it now is wasted tokens unless you suspect external modifications. Skip the Read and proceed."
 
 emit_pre_context "PreToolUse" "$msg"
 exit 0

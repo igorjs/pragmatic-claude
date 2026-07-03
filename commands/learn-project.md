@@ -64,7 +64,7 @@ Dispatch these collectors in parallel. Each returns a compact structured summary
 
 - **git-history**: contributors and ownership, churn hotspots (`git log --format= --name-only | sort | uniq -c | sort -rn`), commit-message and branch conventions, tags/releases, cadence.
 - **code-structure**: top-level tree, entry points, languages, build/test/lint tooling, Dockerfiles / CI-CD configs, IaC, migration dirs and ORM models, `scripts/` and Makefile targets.
-- **pull-requests** (if `gh` ok): `gh pr list --state all --limit <MAX_PRS> --json number,title,labels,body,author` — recurring themes, review norms, linked JIRA keys, notable decisions.
+- **pull-requests** (if `gh` ok): `gh pr list --state all --limit <MAX_PRS> --json number,title,labels,body,author`: recurring themes, review norms, linked JIRA keys, notable decisions.
 - **jira** (if reachable): epics, active sprints/boards, components, common labels for the project key(s).
 - **confluence** (if reachable): pages on setup/onboarding, architecture, runbooks, and decisions in the project space; capture titles, URLs, and key points.
 
@@ -89,7 +89,7 @@ Keep facts atomic: one concept per fact. Drop low-signal or self-evident facts.
 ## Phase 3: Classify, dedupe, plan
 
 - **Scope routing:** default `repo`. Mark `global` only when the fact is org/account-wide and not tied to this repo (company tooling, the Atlassian instance, standards seen across repos). A repo fact that contradicts a global one wins for this repo; note it with a `contradicts` edge.
-- **Dedupe:** read the existing indexes — `<repo>/.claude/memory/MEMORY.md` and `~/.claude/memory/MEMORY.md` — and the relevant fact files. If a fact already exists: skip it, unless `--refresh`, in which case update the file or write a successor carrying a `supersedes` edge. Never blind-duplicate.
+- **Dedupe:** read the existing indexes (`<repo>/.claude/memory/MEMORY.md` and `~/.claude/memory/MEMORY.md`) and the relevant fact files. If a fact already exists: skip it, unless `--refresh`, in which case update the file or write a successor carrying a `supersedes` edge. Never blind-duplicate.
 - **Plan:** show the user a concise table of candidate facts (title · scope · type · new/update/supersede). Ask once: "Write these to memory?" Proceed only on yes; honor a subset selection.
 
 ## Phase 4: Write memory

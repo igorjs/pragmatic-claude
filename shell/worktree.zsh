@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# worktree.zsh — engine for the `cc worktree <branch>` / `ccd worktree`
+# worktree.zsh: engine for the `cc worktree <branch>` / `ccd worktree`
 # subcommand: creates/enters a git worktree with smart defaults, then cd's the
 # current shell into it. Not exposed as a standalone command (the entry point is
 # the private `_cc_worktree`, called only by the _claude dispatcher).
