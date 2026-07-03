@@ -206,33 +206,12 @@ Merge all findings, then (this is where removals happen):
 - **Drop out-of-scope:** a finding on a file not in the PR diff is dropped UNLESS the PR's change breaks it (typecheck failure, runtime error, broken import). Preexisting-style nits outside the diff are dropped.
 - **Filter already-addressed:** fetch existing review comments (`gh api --paginate /repos/$REPO/pulls/$PR_NUMBER/comments`), drop findings that duplicate one, and attribute by name ("already raised by @user").
 - **Fact-check (orchestrator):** for each surviving finding, read the file at `HEAD_SHA` and confirm the evidence appears at the cited line; resolve or remove `[unverified]` tags; correct drifted line numbers; drop fabricated findings.
-- **Drop non-actionable:** `thought`/positive observations with no "do X" → always drop; `nitpick` → drop from an APPROVE review unless asked.
+- **Drop non-actionable:** positive observations or asides with no concrete "do X" → always drop; `nitpick` → drop from an APPROVE review unless asked.
 - **Verdict + confidence:** APPROVE / REQUEST_CHANGES / COMMENT / INCONCLUSIVE. **INCONCLUSIVE (never APPROVE)** if the swarm failed to run; say why. Confidence HIGH/MEDIUM/LOW.
 
 ## Step 5: Present the consolidated report
 
-Present ALL surviving findings (rule 7), using the `/quick-review` report shape:
-
-```
-## PR #<number>: <title>
-<files> | +<additions> -<deletions>
-
-### Overview
-1-3 sentences, human voice.
-
-### Reviewers
-Which reviewers ran, and findings per reviewer (e.g. security: 2, logic: 1, perf: 0).
-
-### Findings
-Numbered, ordered blocking > non-blocking > suggestion > nitpick. Per finding:
-- **<label> (<decoration>):** `<file>:<line>`  [confidence]
-  <1-2 sentence body in the voice rules>
-
-### Verification Summary
-| File | Read? | Lines verified | Findings |
-
-**Verdict:** <...>  **Confidence:** <...>
-```
+Present ALL surviving findings (rule 7). Render the `grounding-review` Review Report Format exactly, INCLUDING the `### Reviewers` line (which reviewers ran, findings per reviewer, e.g. "security 2 · logic 1 · perf 0"). Each finding carries its `Post:` block (the exact GitHub comment), or `Report-only: not on a changed line, no inline draft.` when the evidence is not on a changed diff line.
 
 ## Step 6: Orchestrate posting
 
@@ -241,7 +220,7 @@ If `--self` (or self-review with nothing postable), stop here: the report IS the
 Otherwise ask **one question at a time**:
 
 - **Q1:** "Post which findings as a pending review? all / none / a subset (numbers)." If `none`, stop.
-- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text Conventional Comment label, no review `body`), then create the pending review:
+- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text Conventional Comment label, no review `body`). Build each inline comment's `body` from that finding's `Post:` block verbatim, anchored to the finding's `file:line`. What the user read in the report is exactly what posts. Skip any finding marked `Report-only`. Then create the pending review:
 
 ```bash
 gh api -X POST /repos/$REPO/pulls/$PR_NUMBER/reviews --input "$REVIEW_JSON" --jq '{id, state, html_url}'
@@ -258,7 +237,7 @@ Never fabricate URLs; use the `html_url` the API returns.
 
 ## Step 7: Capture and wrap up
 
-- Persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks/thoughts and anything not posted.
+- Persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks and anything not posted.
 - If non-self-review and the PR has unaddressed review threads, offer to run `/address-pr-comments $PR_NUMBER`.
 - Final message: one line per outcome (pending review id + count, or submitted verb + timestamp).
 

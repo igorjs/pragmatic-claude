@@ -52,7 +52,7 @@ Invoke the `grounding-review` skill before drafting any finding, and load the `w
 
 Comment bodies are read by another engineer, so they use the humane `writing-style` register (warm, contractions, constructive), NOT the terse operator voice from the "Concise & Direct" output style or system prompt `## Output`. Where those would conflict, `writing-style` wins for anything posted to GitHub. The non-negotiable points for inline comments posted to GitHub:
 
-- **Conventional Comments label + decoration on every finding, PLAIN TEXT (no bold).** Start the body with `issue (non-blocking):`, `suggestion:`, `nitpick:`. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Valid labels: `issue`, `suggestion`, `nitpick`, `question`, `thought`, `todo`. Valid decorations: `(blocking)`, `(non-blocking)`, `(if-minor)`.
+- **Conventional Comments label + decoration on every finding, PLAIN TEXT (no bold).** Start the body with `issue (non-blocking):`, `suggestion:`, `nitpick:`. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Valid labels: `issue`, `suggestion`, `nitpick`, `question`. Valid decorations: `(blocking)`, `(non-blocking)`.
 - **1-2 sentences for non-blocking findings.** One ideal, two max. Blocking findings MAY run longer because there's a decision to argue.
 - **Pick one pragmatic fix.** No "X, or Y" options. If both work, prefer the smallest diff and recommend that one.
 - **Paraphrase, don't quote.** Block-quoting the README or source code is almost always longer than restating it in your own words.
@@ -151,35 +151,7 @@ There is no gh-api fallback. If the worktree setup in Step 1 failed, execution h
 
 ## Step 3: Draft the review report
 
-Use the grounding-review Findings Format for the **report you show the user**. Use the condensed inline format (label + 1-3 sentences) for the **content that will go on GitHub**.
-
-Report structure shown to user:
-
-```
-## PR #<number>: <title>
-
-### Overview
-1-3 sentences. What the PR does, in human voice.
-
-### Strengths
-- Terse bullets. Skip if there's nothing genuinely worth calling out; better blank than fake-praise.
-
-### Findings
-For each finding:
-
-- **<label> (<decoration>):** `<file>:<line>`
-  <1-3 sentence body matching the voice rules above>
-  <optional ```suggestion block```>
-
-### Verification Summary
-| File | Read? | Lines Verified | Findings |
-|---|---|---|---|
-| ... | Yes | 12, 42 | #1, #3 |
-
-Confidence: HIGH | MEDIUM | LOW
-```
-
-Severity classification, label choice, blocking-vs-non-blocking, and the categories (security, performance, reliability, maintainability, correctness, architecture, scope) follow grounding-review verbatim.
+Render the `grounding-review` Review Report Format exactly. `/quick-review` is single-pass, so OMIT the `### Reviewers` line; every other line matches the canonical shape. Each finding carries its `Post:` block (the exact GitHub comment), or `Report-only: not on a changed line, no inline draft.` when the evidence is not on a changed diff line.
 
 ## Step 4: Orchestrate posting
 
@@ -189,13 +161,15 @@ Severity classification, label choice, blocking-vs-non-blocking, and the categor
 
 Wait for response. If `none` or `skip`, stop here.
 
+Build each inline comment from that finding's `Post:` block verbatim as the comment `body`, anchored to the finding's `file:line`. What the user read in the report is exactly what posts. Skip any finding marked `Report-only`.
+
 Build a JSON payload at `$REVIEW_JSON` (`/tmp/<org>/<repo>/quick-review-<number>.json`; the directory was created in Step 1):
 
 ```json
 {
   "commit_id": "<HEAD_SHA>",
   "comments": [
-    {"path": "...", "line": N, "side": "RIGHT", "body": "**label (decoration):** ..."},
+    {"path": "...", "line": N, "side": "RIGHT", "body": "label (decoration): ..."},
     {"path": "...", "start_line": N, "start_side": "RIGHT", "line": M, "side": "RIGHT", "body": "..."}
   ]
 }
