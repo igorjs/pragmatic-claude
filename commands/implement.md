@@ -137,7 +137,7 @@ When SOLID's abstraction pulls against KISS/YAGNI, favour the simplest thing tha
    - shared mutable state: both touch a denylisted shared surface (migration dirs; lockfiles `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `Cargo.lock`, `go.sum`; generated, barrel, or index files; global registries; codegen outputs), or there's genuine doubt about shared state.
 
    A plan `Parallel group` annotation, when present, confirms safety but isn't required. A WU that clashes with the forming wave drops to a later wave.
-3. **Dispatch the wave concurrently.** Issue the Task calls in a single message so they run at once, one worktree per WU (see Worktree isolation). A wave of one runs in the main tree with no worktree.
+3. **Dispatch the wave concurrently.** Issue the Task calls in a single message so they run at once, one worktree per WU (see Worktree isolation). A wave of one runs in the main tree with no worktree. Give each Task a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background.
 4. **Integrate, then recompute.** After the wave returns, integrate (below), append to the ledger, then recompute the ready set for the next wave.
 
 Scope each WU's verify command to its own test files (the full suite runs in Step 7) so an in-progress sibling can't trip another's tests.
@@ -245,6 +245,8 @@ This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran
 - **Scope:** anything built beyond the plan; anything the plan required but is missing.
 - **Tests:** weak assertions, missing boundary or regression coverage, flakiness.
 
+Give each reviewer Task a stable `name` and call `TaskStop` on it the moment it returns its findings. Reviewer agents stay idle-alive after returning; this flow never reuses them, so stop each one immediately.
+
 Each lens returns severity-classified findings with `file:line` evidence and a fix per finding. **Consolidate:** merge the returns, dedup overlapping findings, drop anything already addressed, and fact-check each surviving finding against the file at HEAD before acting (discard stale or hallucinated ones). Then apply the fixes you hold with HIGH confidence plus every blocking correctness/security finding, and re-run the Step 7 validation checks. Surface the rest as known follow-ups: don't silently drop them, and don't start a second refinement loop.
 
 **Finish.** In interactive mode, report the applied fixes and unresolved follow-ups to the user; leave the PR to them. In `--auto`, once the Step 7 validation checks are green after the adversarial fixes, open the PR with `gh pr create` (title and body from the plan and commit history, in the `writing-style` voice), listing the unresolved non-blocking findings under a "Follow-ups" heading.
@@ -266,3 +268,7 @@ Each lens returns severity-classified findings with `file:line` evidence and a f
 | Refinement (Step 8) implies new feature scope | Record as a follow-up; don't build it (YAGNI) |
 | Adversarial review (Step 9) finds a blocking issue | Fix it, re-validate, then finish; report non-blocking findings as follow-ups |
 | Refinement or adversarial fix would change behaviour | Don't fold it into the refactor; treat it as a separate fix and re-validate |
+
+## Teardown (MUST run, even on failure or abort)
+
+`TaskStop` every subagent spawned in this flow that is still alive: implementer Tasks from each wave, quality-gate agents from Step 4, and adversarial reviewer Tasks from Step 9. Confirm via `TaskList` that no tasks from this run remain before finishing.

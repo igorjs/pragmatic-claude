@@ -232,7 +232,7 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the full plan and the
 - The test infrastructure the plan assumes actually exists.
 - The Work Unit dependency graph is acyclic, and each Parallel group's WUs have disjoint files with no dependency on each other (the parallel-safe flags are accurate).
 
-Returns a structured PASS / FAIL / WARN report. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
+Returns a structured PASS / FAIL / WARN report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
 
 #### Phase 2: Adversarial Review
 
@@ -244,7 +244,7 @@ Spawn a **general-purpose** agent with the full plan and the Phase 1 report. It 
 - Blast radius: what could this break?
 - Contradictions with the fact-check report.
 
-Returns a structured report. **After it returns**, record any rejected simpler alternative (with reasoning) in the plan's Risks section. **If any FAILs:** revise and re-run Phase 2 (max 3 iterations).
+Returns a structured report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, record any rejected simpler alternative (with reasoning) in the plan's Risks section. **If any FAILs:** revise and re-run Phase 2 (max 3 iterations).
 
 #### Phase 3: Test Review
 
@@ -256,7 +256,7 @@ Spawn an **Explore** agent with the plan's Testing Strategy and the Phase 1 repo
 - Mock quality (mock at the boundary; don't mock another service's tables).
 - Assertion strength.
 
-Returns a structured report. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable test-quality pattern as a memory fact; otherwise skip. **If any FAILs:** revise the test plan and re-run Phase 3 (max 3 iterations).
+Returns a structured report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable test-quality pattern as a memory fact; otherwise skip. **If any FAILs:** revise the test plan and re-run Phase 3 (max 3 iterations).
 
 #### Quality Gate Result
 
@@ -306,6 +306,10 @@ Then:
    - "Implement it when ready: `/implement .claude/plans/<topic-slug>.md` (or the `superpowers:executing-plans` skill)."
    - "Want to capture the key decisions in an ADR (`/adr`)?" (if architectural)
    - **In `--auto`:** also list the **Assumptions** made (especially any `OPEN` ones) so the user can audit the autonomous choices before running `/implement`.
+
+### Step 8: Teardown (MUST run, even on failure or abort)
+
+`TaskStop` every subagent spawned in this flow that is still alive (Phase 1, 2, and 3 agents). Confirm via `TaskList` that none from this run remain before finishing.
 
 ## Adapting to Complexity
 

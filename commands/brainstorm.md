@@ -91,7 +91,7 @@ Run this only when Argument Resolution found a ticket. Skip it entirely for a pl
 - One hop of direct links: linked issues, sub-tasks, parent epic, and linked PRs. `--depth` controls this (0 = ticket only, 1 = direct links (default), 2 = one more hop). Clamp `--depth` to the range 0 to 2, so the crawl is never unbounded.
 - Bounds: cap total related items at about 15, dedup visited tickets by id, and stop early when a hop adds nothing new.
 
-**Discover in parallel.** Fan out discovery agents over the gathered sources (issue the Task calls in one message so they run at once, per Step 2): the ticket body plus comments, batches of linked items, and the attachments. Each returns a short cited summary (the source id or url, and the facts that bear on the work). These feed the Step 2 digest alongside the codebase exploration.
+**Discover in parallel.** Fan out discovery agents over the gathered sources (issue the Task calls in one message so they run at once, per Step 2): the ticket body plus comments, batches of linked items, and the attachments. Each returns a short cited summary (the source id or url, and the facts that bear on the work). These feed the Step 2 digest alongside the codebase exploration. Assign each discovery agent a stable `name` at spawn and `TaskStop` it as soon as it returns. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps a subagent running in the background.
 
 The ticket's title and description become the idea seed for Step 1's framing. Record the ticket id and link so Step 7 can note them in the design doc.
 
@@ -105,7 +105,7 @@ Scale the fan-out to the idea: one agent for a tiny change, up to about four for
 - Integration points and the consumers a change would touch.
 - Constraints: config, conventions, and anything in the code that limits the options.
 
-Consolidate the returns into a short cited digest (a few bullets, each with `file:line`). This grounds the questions that follow so you ask about intent, not about facts the code already holds. In ticket mode, fold the Step 1.5 ticket findings into the same digest, citing the source id or url for those.
+Consolidate the returns into a short cited digest (a few bullets, each with `file:line`). This grounds the questions that follow so you ask about intent, not about facts the code already holds. In ticket mode, fold the Step 1.5 ticket findings into the same digest, citing the source id or url for those. Assign each `Explore` agent a stable `name` at spawn and `TaskStop` it as soon as it returns. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps a subagent running in the background.
 
 ### Step 3: Interactive discovery
 
@@ -187,6 +187,10 @@ Look at the doc with fresh eyes and fix inline:
 ### Step 9: Human review gate
 
 Tell the user: **"Design doc written to `<path>`. Give it a read and tell me if you want changes before we plan."** Wait. If they request changes, make them and re-run Step 8.
+
+### Teardown (MUST run, even on failure or abort)
+
+`TaskStop` every subagent spawned in this flow that is still alive. Confirm via `TaskList` that none from this run remain before proceeding to the handoff.
 
 ### Step 10: Handoff
 

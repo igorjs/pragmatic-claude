@@ -186,7 +186,7 @@ Present the blueprint. Revise in place until the user explicitly approves.
 
 ## Stage 3: Quality Gate (MUST)
 
-After the user approves all drafts, run the three-phase gate before finalising. Don't skip it; don't finalise until it passes or the user explicitly overrides. Criteria are inline. Run Phase 1 first (Phases 2 and 3 read its report), then dispatch Phase 2 and Phase 3 in parallel: issue both Task calls in a single message so they run at once. Phase 2 and Phase 3 are independent, so they never run one at a time; the 1-before-(2,3) order is the only real dependency.
+After the user approves all drafts, run the three-phase gate before finalising. Don't skip it; don't finalise until it passes or the user explicitly overrides. Criteria are inline. Run Phase 1 first (Phases 2 and 3 read its report), then dispatch Phase 2 and Phase 3 in parallel: issue both Task calls in a single message so they run at once. Phase 2 and Phase 3 are independent, so they never run one at a time; the 1-before-(2,3) order is the only real dependency. Spawn each agent with a stable `name`. The moment an agent returns its result, `TaskStop` it; a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background.
 
 ### Phase 1: Fact-Check
 
@@ -238,3 +238,7 @@ Lowercase all words, replace spaces and special characters with hyphens, collaps
 ## Implementing the Blueprint
 
 The blueprint is a self-contained implementation plan. Implement it with `/implement {DIR}/{base}-blueprint.md` (or the `superpowers:executing-plans` skill while it's in use).
+
+## Teardown (MUST run, even on failure or abort)
+
+`TaskStop` every subagent spawned in this flow that is still alive, then confirm via `TaskList` that none from this run remain before finishing.

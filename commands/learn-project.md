@@ -60,7 +60,7 @@ Then, before collecting:
 
 ## Phase 1: Collect (parallel subagents)
 
-Dispatch these collectors in parallel. Each returns a compact structured summary (tight JSON or markdown) that cites paths/refs, NOT raw command output:
+Dispatch these collectors in parallel. Each returns a compact structured summary (tight JSON or markdown) that cites paths/refs, NOT raw command output. Spawn each collector with a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished collector, so leaving it unstopped keeps it running in the background.
 
 - **git-history**: contributors and ownership, churn hotspots (`git log --format= --name-only | sort | uniq -c | sort -rn`), commit-message and branch conventions, tags/releases, cadence.
 - **code-structure**: top-level tree, entry points, languages, build/test/lint tooling, Dockerfiles / CI-CD configs, IaC, migration dirs and ORM models, `scripts/` and Makefile targets.
@@ -70,7 +70,7 @@ Dispatch these collectors in parallel. Each returns a compact structured summary
 
 ## Phase 2: Analyze into topics (parallel subagents)
 
-Feed the Phase 1 findings to one analyst per cluster. Each emits **candidate facts**, where each fact has: `title`, `body` (the fact, then Why, then How to apply), proposed `type` (`project` for repo knowledge, `reference` for external pointers), `scope` (`repo` | `global`), proposed `links` edges, and `anchors` (repo-relative code locations the fact describes: dirs, files, or `file#symbol`).
+Feed the Phase 1 findings to one analyst per cluster. Spawn each analyst with a stable `name` and `TaskStop` it as soon as it returns. A finished agent stays idle-alive for `SendMessage` follow-ups; this flow never reuses one, so stopping it immediately prevents lingering background processes. Each emits **candidate facts**, where each fact has: `title`, `body` (the fact, then Why, then How to apply), proposed `type` (`project` for repo knowledge, `reference` for external pointers), `scope` (`repo` | `global`), proposed `links` edges, and `anchors` (repo-relative code locations the fact describes: dirs, files, or `file#symbol`).
 
 Clusters:
 
@@ -165,6 +165,10 @@ One tight summary:
 - Sources used, and **sources skipped with the reason** (e.g. "Confluence: no MCP and acli absent").
 - The path to each store's `MEMORY.md`.
 - The `graph.json` path, node and edge counts, and any dangling anchors or edges flagged during the build.
+
+## Teardown (MUST run, even on failure or abort)
+
+`TaskStop` every subagent spawned in this flow that is still alive. Confirm via `TaskList` that none from this run remain before finishing.
 
 ## Anti-patterns to refuse
 
