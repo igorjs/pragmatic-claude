@@ -13,12 +13,12 @@
 prompt="$(hi_field '.prompt')"
 [[ -z "$prompt" ]] && exit 0
 
-# Skip slash commands — those are explicit user intents, not natural prose.
+# Skip slash commands, those are explicit user intents, not natural prose.
 case "$prompt" in
   /*) exit 0 ;;
 esac
 
-# Skip very short prompts — usually confirmations / one-word redirects.
+# Skip very short prompts, usually confirmations / one-word redirects.
 if [[ ${#prompt} -lt 20 ]]; then
   exit 0
 fi
@@ -34,15 +34,15 @@ if ! printf '%s' "$prompt" | grep -qE -i "$intent_re"; then
 fi
 
 msg="$(cat <<'MSG'
-This prompt looks like design / architecture work. Your main session runs on the default model. Before reasoning inline, consider delegating to an Opus subagent — its full deliberation stays in the subagent's context, only the conclusion returns to yours.
+This prompt looks like design / architecture work. Your main session runs on the default model. Before reasoning inline, consider delegating to an Opus subagent, its full deliberation stays in the subagent's context, only the conclusion returns to yours.
 
 Recommended for design-heavy prompts:
-  - Plan (Agent tool, `model: "opus"`) — implementation planning and architecture with codebase grounding
-  - superpowers:brainstorming (Skill tool) — ideation / requirements before any code
+  - Plan (Agent tool, `model: "opus"`), implementation planning and architecture with codebase grounding
+  - superpowers:brainstorming (Skill tool), ideation / requirements before any code
 
 If the prompt is actually small-scope (e.g. quick choice between two named options), staying on Sonnet inline is fine. Use judgment.
 
-Routing policy: Opus only when Sonnet wasn't enough — keep Opus under 20% of total usage. Routine/mechanical/formatting/search subagents default to Haiku (3x cheaper); escalate to Sonnet for real coding.
+Routing policy: Opus only when Sonnet wasn't enough, keep Opus under 20% of total usage. Routine/mechanical/formatting/search subagents default to Haiku (3x cheaper); escalate to Sonnet for real coding.
 MSG
 )"
 
