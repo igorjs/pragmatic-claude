@@ -205,7 +205,7 @@ Final user-facing message: one sentence per outcome.
 - "Pending review id `<id>` created, 7 inline comments queued. Submit from the UI when ready."
 - OR: "Submitted as `COMMENT` at <timestamp>. Author will get one notification."
 
-## Step 6: Teardown (MUST run — even on failure, abort, or skip)
+## Step 6: Teardown (MUST run, even on failure, abort, or skip)
 
 If `WT_CREATED` is true, always run:
 

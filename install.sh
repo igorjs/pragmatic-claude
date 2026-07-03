@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# Installer for igorjs/pragmatic-claude — drops the tracked config into ~/.claude
+# Installer for igorjs/pragmatic-claude: drops the tracked config into ~/.claude
 # without a git clone. Quick start:
 #
 #   curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash

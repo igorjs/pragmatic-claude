@@ -26,7 +26,7 @@ _claude() {
     # Value-taking options (e.g. `--system-prompt-file PATH`, injected by cc/ccd)
     # must consume their value too. Otherwise the value is mistaken for the
     # subcommand and the `-n <name>` added below is swallowed as the option's
-    # argument — turning `--system-prompt-file PATH -n name` into
+    # argument, turning `--system-prompt-file PATH -n name` into
     # `--system-prompt-file -n` (claude then looks for a prompt file named "-n").
     # The `--opt=value` form is self-contained, so it is matched first.
     local -a flags
@@ -72,7 +72,7 @@ _claude() {
             [[ -n "$raw_sid" ]] && shift
             [[ -z "$raw_sid" ]] && raw_sid="$(_cc_find_session_by_title "$project_dir" "$name")"
             if [[ -z "$raw_sid" ]]; then
-                print -- "→ cc raw: no matching session — starting fresh"
+                print -- "→ cc raw: no matching session; starting fresh"
                 command claude "${flags[@]}" -n "$name" "$@"
             else
                 print -- "→ cc raw: resuming $raw_sid (no fork, overrides preserved)"
@@ -110,7 +110,7 @@ _claude() {
         fork=()
         if [[ -n "$(_cc_config_drifted)" ]]; then
             fork=(--fork-session)
-            print -- "→ cc: config changed — forking to reload settings/plugins/hooks"
+            print -- "→ cc: config changed; forking to reload settings/plugins/hooks"
         fi
         local _cc_err_tmp
         _cc_err_tmp=$(mktemp)
@@ -118,7 +118,7 @@ _claude() {
         local _cc_rc=$?
         if grep -q "No conversation found" "$_cc_err_tmp" 2>/dev/null; then
             rm -f "$_cc_err_tmp"
-            print -- "→ cc: session ${session_id:0:8}… not found — starting fresh"
+            print -- "→ cc: session ${session_id:0:8}… not found; starting fresh"
             command claude "${flags[@]}" -n "$name" "$@"
         else
             cat "$_cc_err_tmp" >&2

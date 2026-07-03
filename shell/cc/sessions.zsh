@@ -18,7 +18,7 @@ _cc_find_session_by_title() {
     [[ -n "$match_file" ]] && print -- "${match_file:t:r}"
 }
 
-# UUID pattern check — excludes "memory/" and other non-session dirs.
+# UUID pattern check: excludes "memory/" and other non-session dirs.
 _cc_is_uuid() {
     [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
 }
@@ -34,7 +34,7 @@ _cc_enumerate_sessions() {
           _cc_is_uuid "$sid" || continue
           local ts
           ts=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
-          # Pull customTitle from the transcript (cheap — usually in the first few lines).
+          # Pull customTitle from the transcript (cheap, usually in the first few lines).
           local title
           title=$(grep -m1 -oE '"customTitle":"[^"]*"' "$f" 2>/dev/null | head -1 \
                     | sed 's/"customTitle":"//; s/"$//')

@@ -70,7 +70,7 @@ This happens before Step 1. The loaded content replaces the raw argument as the 
 
 ## Autonomous Mode (`--auto`)
 
-Enable when `--auto` appears in the arguments; strip it (like `--help`) before resolving the topic seed. `--auto` runs the entire scope without the interview, then stops after saving the plan — it never writes code (run `/implement` to build it). Concretely:
+Enable when `--auto` appears in the arguments; strip it (like `--help`) before resolving the topic seed. `--auto` runs the entire scope without the interview, then stops after saving the plan. It never writes code (run `/implement` to build it). Concretely:
 
 - **No questions.** For every decision Step 2 would ask, take the answer you would have recommended ("I'd recommend X because Y") and proceed. Still do the Step 1 research first: explore the codebase and, if a memory store is present, read it too, since a preference or convention there may override your default choice. When no memory store exists, skip that step silently.
 - **Record assumptions.** Every self-made decision goes into an **Assumptions** list with its rationale, so the user can audit what was chosen for them. When you're genuinely split on a decision, record it as an `OPEN` assumption (with the leading option and why) rather than silently picking.
@@ -118,7 +118,7 @@ I looked at [what you explored] and here's what I understand so far:
 First question: [question]? **I'd recommend [X]** because [reason from codebase].
 ```
 
-**In `--auto`:** gather the same context but ask nothing — go straight to Step 2 and self-resolve the decision tree, recording each choice as an assumption.
+**In `--auto`:** gather the same context but ask nothing: go straight to Step 2 and self-resolve the decision tree, recording each choice as an assumption.
 
 ### Step 2: Decision Tree Interview
 

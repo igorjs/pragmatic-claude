@@ -43,20 +43,20 @@ CI_CACHE_TTL="${STATUSLINE_CI_CACHE_TTL:-60}"        # Seconds before cached CI 
 CACHE_DIR="${STATUSLINE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/statusline}"
 
 # ┌──────────────────────────────────────────────────────────────────────────────┐
-# │  Colour Palette — Catppuccin Mocha                                          │
+# │  Colour Palette: Catppuccin Mocha                                           │
 # │                                                                             │
 # │  Uses true-colour (24-bit) ANSI escapes. Requires a terminal that           │
 # │  supports \033[38;2;R;G;Bm sequences (iTerm2, Kitty, Alacritty, etc).      │
 # └──────────────────────────────────────────────────────────────────────────────┘
 
-GREEN='\033[38;2;166;227;161m'    # #a6e3a1 — paths, values, approved
-RED='\033[38;2;243;139;168m'      # #f38ba8 — git branch, changes requested, closed
-YELLOW='\033[38;2;249;226;175m'   # #f9e2af — git status brackets, review required
-ORANGE='\033[38;2;250;179;135m'   # #fab387 — model name, cost, PR number
-WHITE='\033[38;2;205;214;244m'    # #cdd6f4 — connectors ("via"), PR author
-TEAL='\033[38;2;148;226;213m'     # #94e2d5 — cache statistics
-MAUVE='\033[38;2;203;166;247m'    # #cba6f7 — merged PRs
-DIM='\033[38;2;127;132;156m'      # #7f849c — labels, separators
+GREEN='\033[38;2;166;227;161m'    # #a6e3a1: paths, values, approved
+RED='\033[38;2;243;139;168m'      # #f38ba8: git branch, changes requested, closed
+YELLOW='\033[38;2;249;226;175m'   # #f9e2af: git status brackets, review required
+ORANGE='\033[38;2;250;179;135m'   # #fab387: model name, cost, PR number
+WHITE='\033[38;2;205;214;244m'    # #cdd6f4: connectors ("via"), PR author
+TEAL='\033[38;2;148;226;213m'     # #94e2d5: cache statistics
+MAUVE='\033[38;2;203;166;247m'    # #cba6f7: merged PRs
+DIM='\033[38;2;127;132;156m'      # #7f849c: labels, separators
 RESET='\033[0m'
 
 SEP="${DIM} | ${RESET}"           # Dim pipe between line-2 segments
@@ -226,7 +226,7 @@ osc8_link() {
 }
 
 # True when the path is under ~/Workspace/ (work projects). The trailing slash is
-# load-bearing — without it ~/Workspace-personal/ would also match, but that tree
+# load-bearing: without it ~/Workspace-personal/ would also match, but that tree
 # is explicitly excluded from CI status display.
 is_workspace_project() {
     [[ "$1" == "$HOME/Workspace/"* ]]
@@ -275,7 +275,7 @@ fi
 cwd="${cwd:-$PWD}"
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  LINE 1 — Working directory, git info, PR status                             ║
+# ║  LINE 1: Working directory, git info, PR status                              ║
 # ╠══════════════════════════════════════════════════════════════════════════════╣
 
 # ── Left side: path + git branch + dirty indicator + node version ──
@@ -351,7 +351,7 @@ fi
 # Reads whatever is cached and renders immediately. If the cache is stale or
 # missing, spawns a fully-detached background `gh pr view` to refresh it for the
 # next render (the harness re-runs us every refreshInterval seconds). The
-# synchronous path NEVER blocks on `gh` — that's what trips Claude Code's
+# synchronous path NEVER blocks on `gh`: that's what trips Claude Code's
 # statusline timeout and disables it for the rest of the process lifetime.
 
 right=""
@@ -362,7 +362,7 @@ if [[ "$SHOW_PR" == true && "$git_in_repo" == true \
     && command -v gh >/dev/null 2>&1; then
 
     # Shared cache (repo + branch). The file may not exist yet, may be empty (a
-    # known "no PR" marker), or may be stale — we use it as-is and refresh in bg.
+    # known "no PR" marker), or may be stale; we use it as-is and refresh in bg.
     pr_cache_file="${CACHE_DIR}/pr-$(cache_slug "${cwd}::${branch}").json"
     pr_cache_age=999999
     [[ -f "$pr_cache_file" ]] && pr_cache_age=$(( $(date +%s) - $(file_mtime "$pr_cache_file") ))
@@ -405,7 +405,7 @@ if [[ "$SHOW_PR" == true && "$git_in_repo" == true \
     # ── CI rollup (workspace projects only) ──
     # Collapses statusCheckRollup (a heterogeneous array of CheckRun + StatusContext
     # entries) into a single state plus counts. The // [] fallback handles cached PR
-    # JSON written before this field was tracked — those simply render as "none".
+    # JSON written before this field was tracked; those simply render as "none".
     ci_state=""; ci_failed=0; ci_running=0; ci_total=0
     if [[ "$SHOW_CI" == true ]] && is_workspace_project "$cwd" && [[ -n "$pr_json" ]]; then
         ci_summary=$(printf '%s' "$pr_json" | jq -r '
@@ -586,7 +586,7 @@ if [[ "$SHOW_CI" == true ]] && is_workspace_project "$cwd" \
     ci_json=""
     [[ -f "$ci_cache_file" ]] && ci_json=$(cat "$ci_cache_file" 2>/dev/null || true)
 
-    # Refresh asynchronously when stale or missing — never block the render.
+    # Refresh asynchronously when stale or missing; never block the render.
     if [[ "$ci_cache_age" -ge "$CI_CACHE_TTL" ]]; then
         ci_lock="${ci_cache_file}.lock"
         ci_lock_age=0
@@ -656,11 +656,11 @@ else
 fi
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  LINE 2 — Model state + session economics                                    ║
+# ║  LINE 2: Model state + session economics                                     ║
 # ║                                                                              ║
 # ║  Opus 4.8 (high) | Ctx [███░░░] 38% | 5h 23% (2h left) | $0.42 | Cache 99%    ║
 # ║                                                                              ║
-# ║  Each section is a small render_* function — easy to disable / re-order.     ║
+# ║  Each section is a small render_* function (easy to disable / re-order).     ║
 # ╠══════════════════════════════════════════════════════════════════════════════╣
 
 # Effort + thinking come straight from the JSON input (.effort.level / .thinking.enabled).
@@ -742,7 +742,7 @@ render_rate_5h() {
     printf '%s' "$out"
 }
 
-# Trailing 7d quota — surfaces only once it crosses 50% (5h has its own segment).
+# Trailing 7d quota: surfaces only once it crosses 50% (5h has its own segment).
 render_rate_7d() {
     [[ "$SHOW_RATE_LIMITS" == true && -n "$rl_7d" ]] || return 0
     awk -v v="${rl_7d:-0}" 'BEGIN { exit (v + 0 > 50) ? 0 : 1 }' 2>/dev/null || return 0

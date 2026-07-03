@@ -29,7 +29,7 @@ If the session did not touch a repo, replace this with the equivalent "current s
 The choices that survived this session and the reason each one was made. One line per decision. The WHY is mandatory: a decision without its reason rots into folklore.
 
 Rules:
-- Capture the chosen path, not the alternatives explored. Future readers do not need the deliberation — they need the chosen path and the reasoning so they can revisit it later if the assumption breaks.
+- Capture the chosen path, not the alternatives explored. Future readers do not need the deliberation; they need the chosen path and the reasoning so they can revisit it later if the assumption breaks.
 - If a decision was forced by an external constraint (a library limitation, a registry reality, a plan mandate, a user directive), name the constraint inline.
 - If a decision was a deferral ("we punted X to v0.3 because Y"), record it here, not in next steps. Deferrals are decisions.
 - A reversal counts: if you changed direction mid-session, the final decision is what gets recorded.
@@ -53,7 +53,7 @@ This is the section where "we did not verify X" or "Y depends on Z which is not 
 - Decisions and facts only. No tool narration ("I read", "I dispatched", "I searched"). No exploration recap. The reader does not care how you investigated, only what is true now.
 - Concrete identifiers. Name commits with short SHAs, files with `path:line` references, versions as exact strings, dates as absolute ISO. "We bumped TypeScript" is wrong; "TS 5.5.0 -> 5.9.3 because 5.5.0 was never released stable" is right.
 - Tight. Each section under ~10 lines unless the session genuinely covered multiple subsystems. The whole document should fit on one screen for a single-thread session.
-- No emojis. No em dashes or en dashes — use ASCII hyphens.
+- No emojis. No em dashes or en dashes: use ASCII hyphens.
 - No preamble ("Here is the handoff..."). No closing summary or trailing "Let me know if you need anything else". The document ends where it ends.
 - A handoff that requires the source conversation to be understood is a failure of the skill. If you cannot make a point stand alone, drop it.
 

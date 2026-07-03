@@ -27,7 +27,7 @@ Combined flags are fine: `-yA`, `-yu`, `-y -a -u`, etc. No flags means: ask for 
 4. Combine independent bash operations into single tool calls.
 5. Never run destructive git commands (`reset --hard`, `push --force`, `clean -f`) unless the user explicitly asks.
 6. Never skip hooks (`--no-verify`, `--no-gpg-sign`).
-7. Never amend automatically — only when `AMEND_COMMIT=true`.
+7. Never amend automatically: only when `AMEND_COMMIT=true`.
 8. Pass commit messages via heredoc to preserve formatting, never `-m "..."` for multi-line.
 
 ## Step 1: Stage, format, emit context
