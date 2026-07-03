@@ -31,6 +31,17 @@
 #
 #   cc list           Show recent sessions for $PWD with timestamps + titles.
 #
+#   cc worktree <branch> [env-base]
+#                     Create or enter a git worktree for <branch> off the base
+#                     branch, then launch a session in it. Folder is named after
+#                     the JIRA key in the branch. Claude auto-resolves rebase
+#                     conflicts (--ai-resolve always set).
+#
+#   cc workspace <ticket> [env-base]   (alias: cc new <ticket>)
+#                     Like worktree, but names the branch "<github-user>/<ticket>"
+#                     (bare <ticket> if no GitHub user resolves). E.g.
+#                     `cc new PROJ-1234` -> branch igorjs/PROJ-1234, folder PROJ-1234.
+#
 #   ccd <any of the above>: same dispatch, with --dangerously-skip-permissions.
 #
 # Default-path extras:

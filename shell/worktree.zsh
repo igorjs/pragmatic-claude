@@ -29,6 +29,18 @@ _wt_help() {
 # md5 (macOS) | md5sum (Linux) -> short stable hash of a string
 _wt_hash() { print -- "$1" | md5 -q 2>/dev/null || md5sum <<< "$1" | cut -c1-8; }
 
+# Resolve the GitHub username used to prefix `cc workspace`/`cc new` branches.
+# Honors CC_GH_USER (manual override; also lets tests run without gh/network),
+# otherwise asks gh. Prints empty (not an error) when nothing resolves, so the
+# caller can fall back to the bare ticket.
+_wt_gh_user() {
+    if [[ -n "${CC_GH_USER:-}" ]]; then
+        print -- "$CC_GH_USER"
+        return 0
+    fi
+    gh api user --jq '.login' 2>/dev/null || true
+}
+
 # Detect base branch as a remote-tracking ref, e.g. origin/main
 _wt_base_branch() {
     local base
@@ -399,4 +411,37 @@ _cc_worktree() {
     print -u2 -- "worktree: setting up '$BRANCH'..."
     { _wt_main; rc=$? } always { _wt_restore_stash; (( rc )) && cd "$_wt_origin" 2>/dev/null }
     return $rc
+}
+
+# Private entry point for `cc workspace <ticket>` / `cc new <ticket>` (called
+# only by the _claude dispatcher). A thin wrapper over _cc_worktree that names
+# the branch "<github-user>/<ticket>", e.g. `cc new PROJ-1234` -> branch
+# igorjs/PROJ-1234 (folder PROJ-1234, from the JIRA key). Falls back to the bare
+# ticket when no username resolves. All flags (e.g. --ai-resolve) and the
+# optional env-base-folder pass straight through to _cc_worktree.
+_cc_workspace() {
+    emulate -L zsh 2>/dev/null || true
+    setopt local_options no_nomatch 2>/dev/null || true
+
+    # Split flags from positionals so only the ticket is transformed; everything
+    # else reaches _cc_worktree unchanged. The ticket is the first positional,
+    # an optional env-base-folder the second (mirrors _cc_worktree's arg order).
+    local -a flags positionals
+    local a
+    for a in "$@"; do
+        case "$a" in
+            -*) flags+=("$a") ;;
+            *)  positionals+=("$a") ;;
+        esac
+    done
+
+    local ticket="${positionals[1]:-}"
+    [[ -z "$ticket" ]] && { _wt_die "usage: workspace <ticket> [env-base-folder]" 2; return $?; }
+    local env_base="${positionals[2]:-}"
+
+    local user branch
+    user="$(_wt_gh_user)"
+    if [[ -n "$user" ]]; then branch="$user/$ticket"; else branch="$ticket"; fi
+
+    _cc_worktree "${flags[@]}" "$branch" ${env_base:+"$env_base"}
 }

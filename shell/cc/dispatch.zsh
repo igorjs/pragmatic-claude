@@ -3,11 +3,12 @@
 # cc module: _claude dispatcher
 #
 # Drop-in replacement for the original _claude that adds subcommand dispatch
-# (clean / fresh / raw / list) while preserving the resume-by-customTitle
-# default. All non-subcommand args (including --dangerously-skip-permissions
-# from ccd) are passed through to `command claude` unchanged.
+# (clean / fresh / raw / list / worktree / workspace|new) while preserving the
+# resume-by-customTitle default. All non-subcommand args (including
+# --dangerously-skip-permissions from ccd) are passed through to
+# `command claude` unchanged.
 #
-# Depends on: bust-cache, config-drift, sessions, clean-resume modules.
+# Depends on: bust-cache, config-drift, sessions, clean-resume, worktree modules.
 _claude() {
     emulate -L zsh 2>/dev/null || true
     _cc_bust_cache
@@ -92,6 +93,16 @@ _claude() {
             # rebase conflicts. worktree() cd's us into the new tree; recursing
             # into _claude with just the leading flags does the normal launch.
             _cc_worktree --ai-resolve "$@" || return $?
+            _claude "${flags[@]}"
+            return $?
+            ;;
+        workspace|--workspace|new|--new)
+            shift
+            # cc/ccd workspace|new <ticket>: like worktree, but names the branch
+            # "<github-user>/<ticket>" (bare ticket if no user resolves), so
+            # `cc new PROJ-1234` -> branch igorjs/PROJ-1234. Delegates to the
+            # worktree engine (which cd's us in), then launches a session there.
+            _cc_workspace --ai-resolve "$@" || return $?
             _claude "${flags[@]}"
             return $?
             ;;

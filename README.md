@@ -65,11 +65,14 @@ cc list                # recent sessions for this directory
 cc clean               # resume with /model, /effort, /output-style overrides stripped
 cc raw [id]            # resume verbatim, no fork or cleanup
 cc worktree <branch>   # create/enter a git worktree, then start a session there
+cc new <ticket>        # worktree named <github-user>/<ticket> (alias: cc workspace)
 ```
 
 `cc` loads the system prompt, picks a model, and prunes old transcripts (keeps the newest 5).
 
 `cc worktree` (also `ccd worktree`) creates or enters a worktree off the project's base branch. It names the folder after the JIRA key in the branch name, copies `.env`, reuses `node_modules` via hardlinks, sets upstream, and runs a daily background cleanup of merged or stale worktrees. Claude auto-resolves rebase conflicts (`--ai-resolve` is always set). Only available via `cc`/`ccd`.
+
+`cc new <ticket>` (alias `cc workspace <ticket>`) is `cc worktree` with the branch named `<github-user>/<ticket>`: it resolves your GitHub login (via `CC_GH_USER` or `gh api user`) and prefixes the ticket, so `cc new PROJ-1234` creates branch `igorjs/PROJ-1234` in folder `PROJ-1234`. If no username resolves, it falls back to the bare ticket. Everything else (stash, base-branch rebase, upstream push, `.env`/`node_modules` reuse) is inherited from `cc worktree`.
 
 ## Docs
 
