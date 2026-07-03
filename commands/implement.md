@@ -93,6 +93,8 @@ Decide whether the resolved reference is a **ready, executable plan**: it names 
 - A spec/issue/ticket detailed enough (explicit files, steps, acceptance criteria, tests) → ready. Proceed.
 - **Anything else** (raw text, a thin issue/ticket, a vague request) → **STOP.** Tell the user: "This isn't a ready plan. Run `/scope` (or `/adr` for an architectural decision) to produce one, then `/implement` it." Do NOT generate a plan inline; planning is `/scope` and `/adr`'s job. (The Step 8 refinement pass is the sole exception, and only to re-plan refactors of code already written, never new scope.)
 
+If the plan or ADR blueprint ends with a "Confidence + open items" trailer, read it and carry the open items as a watch list through execution and the refinement/adversarial review: treat them as the spots most likely to be wrong, and confirm or resolve each before claiming the work done.
+
 ## Step 3: Load Standards and Context
 
 - Invoke the `engineering-standards` skill (testing requirements, mocking, PR readiness, deployment), the `grounding-research` skill (verify before asserting), and `writing-style` (for any prose, e.g. commit messages and the PR body).
