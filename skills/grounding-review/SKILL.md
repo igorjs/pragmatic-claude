@@ -196,11 +196,11 @@ Every review MUST end with a Verification Summary table.
 ```
 ## Verification Summary
 
-| File | Read? | Lines Verified | Findings on File |
+| File | Read | Lines | Findings |
 |---|---|---|---|
-| src/dao/UserDao.ts | Yes (Read tool) | 12, 15, 42 | #1, #3 |
-| src/auth/login.ts | Yes (Read tool) | 4, 8 | #2 |
-| src/utils/hash.ts | No (not in diff) | - | - |
+| src/dao/UserDao.ts | Yes | 12, 15, 42 | #1, #3 |
+| src/auth/login.ts | Yes | 4, 8 | #2 |
+| src/utils/hash.ts | No | - | - |
 
 Confidence: HIGH | All findings verified against source files.
 ```
