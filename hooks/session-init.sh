@@ -51,7 +51,7 @@ extra_context=""
 if [[ "$source" == "resume" && -n "$current_hash" ]]; then
   prev_hash="$(cat "$hash_file" 2>/dev/null)"
   if [[ -n "$prev_hash" && "$prev_hash" != "$current_hash" ]]; then
-    system_message="⚠ Claude config (settings.json + hooks) has drifted since this session was created. Plugins, output style, model default, and new hooks will NOT take effect on this resumed session — they're frozen at the original startup snapshot. To apply current config: exit and run \`cc fresh\` (or \`claude\` without --resume)."
+    system_message="⚠ Claude config (settings.json + hooks) has drifted since this session was created. Plugins, output style, model default, and new hooks will NOT take effect on this resumed session: they're frozen at the original startup snapshot. To apply current config: exit and run \`cc fresh\` (or \`claude\` without --resume)."
     extra_context="The user resumed this session, but the config hash has changed since session creation. The harness has the OLD settings loaded. If the user asks about why a recent settings change isn't showing up, point them to 'cc fresh' or starting a new \`claude\` invocation."
   fi
 fi

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# review-worktree.sh — manage git review worktrees
+# review-worktree.sh: manage git review worktrees
 # Usage:
 #   bash review-worktree.sh setup <pr> <head_sha>
 #   bash review-worktree.sh teardown <path>
@@ -17,7 +17,7 @@ _die() {
 # Sweep stale linked worktrees. A worktree is stale if:
 #   - it has no lock file (unlocked leftover), OR
 #   - the lock file exists but ts is missing or older than TTL
-# Fresh = lock file present with parseable ts within TTL (pid not checked — subshells die).
+# Fresh = lock file present with parseable ts within TTL (pid not checked; subshells die).
 _sweep_stale_worktrees() {
   local ROOT="$1"
   local now ttl
@@ -34,7 +34,7 @@ _sweep_stale_worktrees() {
     [[ -f "$gitdir_file" ]] || continue
 
     gitdir_path="$(cat "$gitdir_file")"
-    # gitdir_path is like /path/to/wt/.git — derive the wt directory
+    # gitdir_path is like /path/to/wt/.git; derive the wt directory
     wt_path="$(dirname "$gitdir_path")"
 
     # Only manage worktrees we created under review-worktrees/
@@ -80,7 +80,7 @@ cmd_setup() {
   # Sweep stale linked worktrees
   _sweep_stale_worktrees "$ROOT"
 
-  # Fetch PR head ref — resolve URL via gh when GH_FETCH_URL is not set
+  # Fetch PR head ref: resolve URL via gh when GH_FETCH_URL is not set
   local fetch_url="${GH_FETCH_URL:-}"
   if [[ -z "$fetch_url" ]]; then
     fetch_url="$(gh repo view --json url -q .url)" \

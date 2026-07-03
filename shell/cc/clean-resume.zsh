@@ -10,7 +10,7 @@
 #   /model, /effort, /config, /output-style, /style
 #
 # NOT stripped:
-#   - corresponding stdout entries (just display text — harmless on replay)
+#   - corresponding stdout entries (just display text, harmless on replay)
 #   - other slash commands (/clear, /resume, /mcp, /plugin, /permissions, …)
 #   - permission-mode entries (security-relevant; user should re-grant)
 _cc_clean_resume() {
@@ -20,7 +20,7 @@ _cc_clean_resume() {
     local old_sid
     old_sid="$(_cc_find_session_by_title "$project_dir" "$name")"
     if [[ -z "$old_sid" ]]; then
-        print -- "→ cc clean: no matching session for '$name' — starting fresh"
+        print -- "→ cc clean: no matching session for '$name'; starting fresh"
         command claude -n "$name" "$@"
         return $?
     fi

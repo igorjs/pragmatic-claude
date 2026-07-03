@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# review-worktree.test.sh — self-contained smoke tests for shell/review-worktree.sh
+# review-worktree.test.sh: self-contained smoke tests for shell/review-worktree.sh
 #
 # Run:  bash shell/review-worktree.test.sh
 # Exit: 0 if all 9 scenarios pass, non-zero otherwise.
@@ -34,7 +34,7 @@ run_scenario() {
 }
 
 # ---------------------------------------------------------------------------
-# Shared repo bootstrap — sets REPO_DIR, BARE_DIR, HEAD_SHA, GH_FETCH_URL
+# Shared repo bootstrap: sets REPO_DIR, BARE_DIR, HEAD_SHA, GH_FETCH_URL
 # Must be called directly (NOT inside $(...)) so exports reach the caller.
 # ---------------------------------------------------------------------------
 setup_repo() {
@@ -96,7 +96,7 @@ scenario_b() {
 
   local wt_path
   wt_path="$(cd "$repo" && bash "$HELPER" setup 7 "$sha" 2>/dev/null)"
-  [[ -d "$wt_path" ]] || { echo "  setup failed — skipping teardown check"; return 1; }
+  [[ -d "$wt_path" ]] || { echo "  setup failed, skipping teardown check"; return 1; }
 
   cd "$repo" && bash "$HELPER" teardown "$wt_path"
   local rc=$?
@@ -149,7 +149,7 @@ scenario_d() {
   git -C "$bare" update-ref refs/pull/7/head "$new_sha"
 
   # Create the stale worktree under ${ROOT}/review-worktrees/ so the sweep
-  # prefix guard matches it — path must be under that directory.
+  # prefix guard matches it; path must be under that directory.
   local ROOT
   ROOT="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"
   mkdir -p "${ROOT}/review-worktrees"
@@ -264,7 +264,7 @@ scenario_i() {
   # shellcheck disable=SC2064
   trap "rm -rf \"$repo\" \"$bare\"" EXIT INT TERM
 
-  # Invoke the helper from /tmp — it must resolve the git repo via GIT_DIR and
+  # Invoke the helper from /tmp: it must resolve the git repo via GIT_DIR and
   # still print an absolute path.
   local wt_path
   wt_path="$(cd /tmp && GH_FETCH_URL="$GH_FETCH_URL" GIT_DIR="$repo/.git" \

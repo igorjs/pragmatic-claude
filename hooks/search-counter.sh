@@ -12,7 +12,7 @@
 #     follow-ups, which we want to encourage, not discourage).
 #
 # Emits additionalContext at thresholds 4, 8, 12. Past 12 it stays silent so
-# it doesn't become spam — by then Claude has either delegated or chosen not to.
+# it doesn't become spam: by then Claude has either delegated or chosen not to.
 . "$(dirname "$0")/lib/common.sh"
 
 dir="$(session_dir)"
@@ -55,11 +55,11 @@ printf '%s' "$n" > "${count_file}.tmp.$$" && mv "${count_file}.tmp.$$" "$count_f
 case "$n" in
   4)
     emit_pre_context "PreToolUse" \
-"Search/read count for this session has reached ${n}. If your remaining searches will fan across more than a couple more files, dispatch the Explore subagent now (Task tool, subagent_type: \"Explore\") — its full search context stays in its window and only a digest comes back to yours. Keeps main context lean for the actual work."
+"Search/read count for this session has reached ${n}. If your remaining searches will fan across more than a couple more files, dispatch the Explore subagent now (Task tool, subagent_type: \"Explore\"): its full search context stays in its window and only a digest comes back to yours. Keeps main context lean for the actual work."
     ;;
   8)
     emit_pre_context "PreToolUse" \
-"Search/read count is now ${n}. You're deep in exploration — strongly prefer dispatching the Explore subagent for the rest of this discovery work. Each additional Read here costs main-context tokens you won't recover."
+"Search/read count is now ${n}. You're deep in exploration, so strongly prefer dispatching the Explore subagent for the rest of this discovery work. Each additional Read here costs main-context tokens you won't recover."
     ;;
   12)
     emit_pre_context "PreToolUse" \

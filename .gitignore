@@ -24,7 +24,7 @@
 !/output-styles/
 
 # Override the global excludesfile (~/.gitignore.global), which ignores
-# docs/superpowers/ — we want our specs tracked here.
+# docs/superpowers/ (we want our specs tracked here).
 # !/docs/superpowers/
 
 # Build artifacts inside vendored/custom hook projects.

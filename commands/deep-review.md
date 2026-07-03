@@ -88,16 +88,16 @@ ARGS="$ARGUMENTS"
 PR_ARG=$(echo "$ARGS" | tr ' ' '\n' | grep -E '^#?[0-9]+$' | head -1 | tr -d '#')
 
 if [[ -n "$PR_ARG" ]]; then
-  # Integer or #N — explicit PR number
+  # Integer or #N: explicit PR number
   PR_NUMBER="$PR_ARG"
 else
   PR_ARG=$(echo "$ARGS" | tr ' ' '\n' | grep -vE '^--|^$' | grep -vE '^#?[0-9]+$' | head -1)
   if [[ -n "$PR_ARG" ]]; then
-    # Branch name — resolve to its open PR number
+    # Branch name: resolve to its open PR number
     PR_NUMBER=$(gh pr list --head "$PR_ARG" --json number -q '.[0].number' 2>/dev/null)
     [[ -n "$PR_NUMBER" ]] || { echo "error: no open PR for branch $PR_ARG" >&2; exit 1; }
   else
-    # Empty — current branch's PR
+    # Empty: current branch's PR
     PR_NUMBER=$(gh pr view --json number -q .number 2>/dev/null) || { echo "error: no PR for current branch; pass a PR number" >&2; exit 1; }
   fi
 fi
@@ -241,7 +241,7 @@ Never fabricate URLs; use the `html_url` the API returns.
 - If non-self-review and the PR has unaddressed review threads, offer to run `/address-pr-comments $PR_NUMBER`.
 - Final message: one line per outcome (pending review id + count, or submitted verb + timestamp).
 
-## Step 8: Teardown (MUST run — even on failure, abort, or skip)
+## Step 8: Teardown (MUST run, even on failure, abort, or skip)
 
 **Stop every reviewer subagent first.** `TaskStop` each reviewer spawned in Step 3 that is still alive (any you didn't already close on return). Use `TaskList` to confirm none from this swarm are still running before you finish. A returned agent stays idle-alive for follow-ups and this review never sends any, so an unstopped reviewer lingers as a background process. Do this whether the review completed, failed, was skipped, or aborted mid-swarm.
 

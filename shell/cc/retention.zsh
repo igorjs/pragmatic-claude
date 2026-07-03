@@ -5,7 +5,7 @@
 # Keep only the newest $CCD_KEEP transcripts (default 5) for the current
 # project; delete older ones plus their tool-result sidecar + runtime state.
 # CCD_KEEP=0 disables. A floor of 2 protects fork/clean parents (always the 2nd
-# newest). find+stat+sort — no zsh glob qualifiers (those misbehave non-interactively).
+# newest). find+stat+sort: no zsh glob qualifiers (those misbehave non-interactively).
 _cc_prune() {
     local keep=${CCD_KEEP:-5}
     [[ "$keep" -le 0 ]] && return 0

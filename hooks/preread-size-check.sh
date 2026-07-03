@@ -11,7 +11,7 @@ path="$(hi_field '.tool_input.file_path')"
 [[ -z "$path" ]] && exit 0
 [[ -f "$path" ]] || exit 0
 
-# Honour explicit offset/limit — caller already knows what they're doing.
+# Honour explicit offset/limit: caller already knows what they're doing.
 offset="$(hi_field '.tool_input.offset')"
 limit="$(hi_field '.tool_input.limit')"
 [[ -n "$offset" || -n "$limit" ]] && exit 0
@@ -40,7 +40,7 @@ if [[ "${lines:-0}" -le $LINE_LIMIT && "${bytes:-0}" -le $BYTE_LIMIT ]]; then
 fi
 
 reason="$(cat <<MSG
-This file is ${lines} lines / ${bytes} bytes — too large to Read in full.
+This file is ${lines} lines / ${bytes} bytes, too large to Read in full.
 
 Cheaper approaches:
   1. Grep the file first to find the relevant line ranges.
@@ -49,7 +49,7 @@ Cheaper approaches:
      with explicit offset:0, limit:9999 to override this guard.
 
 Why this matters: full Reads on large files burn input tokens that almost never
-pay back — most callers only use 10-20% of the content.
+pay back. Most callers only use 10-20% of the content.
 MSG
 )"
 
