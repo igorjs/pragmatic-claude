@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
-set -euo pipefail
+# PreToolUse(Bash) guard: block `rm` targets outside ~/Workspace/** and ~/.claude/**.
+# Best-effort protection against an accidental rm, NOT a security boundary: it can't
+# parse `rm` hidden in command substitution, and it only guards `rm` (not find -delete,
+# unlink, or `>` truncation). A `cd` in the command makes relative targets
+# unresolvable, so those are blocked conservatively.
+set -u  # not -e: a parse failure must not exit non-zero and let the rm through
 
 CMD=$(jq -r '.tool_input.command // ""' -)
 [[ -z "$CMD" ]] && exit 0
@@ -18,11 +23,16 @@ is_allowed() {
 }
 
 in_rm=false
+saw_cd=false
 outside=()
 IFS=' ' read -ra tokens <<< "$CMD"
 
 for token in "${tokens[@]}"; do
   [[ -z "$token" ]] && continue
+  # A `cd` anywhere means $(pwd) no longer reflects where a relative rm resolves.
+  if [[ "$token" == "cd" || "$token" == */cd ]]; then
+    saw_cd=true; continue
+  fi
   if [[ "$token" == "rm" || "$token" == */rm ]]; then
     in_rm=true; continue
   fi
@@ -31,7 +41,11 @@ for token in "${tokens[@]}"; do
   fi
   if [[ "$in_rm" == true ]]; then
     [[ "$token" == -* ]] && continue
-    is_allowed "$token" || outside+=("$token")
+    if [[ "$saw_cd" == true && "$token" != /* && "$token" != '~'* ]]; then
+      outside+=("$token")            # relative target after a cd: unresolvable, block
+    elif ! is_allowed "$token"; then
+      outside+=("$token")
+    fi
   fi
 done
 

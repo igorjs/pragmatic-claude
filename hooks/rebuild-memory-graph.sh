@@ -17,7 +17,7 @@ if [[ -n "$HOOK_INPUT" ]]; then
   file_path="$(printf '%s' "$HOOK_INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
   # Expand ~ so comparison works
   file_path="${file_path/#\~/$HOME}"
-  if [[ -n "$file_path" ]] && [[ "$file_path" != "$MEMORY_DIR"* ]]; then
+  if [[ -z "$file_path" || "$file_path" != "$MEMORY_DIR"* ]]; then
     exit 0
   fi
 fi

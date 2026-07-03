@@ -34,7 +34,7 @@ if ! printf '%s' "$prompt" | grep -qE -i "$intent_re"; then
 fi
 
 msg="$(cat <<'MSG'
-This prompt looks like design / architecture work. Your main session is on Sonnet for cost. Before reasoning inline, consider delegating to an Opus subagent — its full deliberation stays in the subagent's context, only the conclusion returns to yours.
+This prompt looks like design / architecture work. Your main session runs on the default model. Before reasoning inline, consider delegating to an Opus subagent — its full deliberation stays in the subagent's context, only the conclusion returns to yours.
 
 Recommended for design-heavy prompts:
   - Plan (Agent tool, `model: "opus"`) — implementation planning and architecture with codebase grounding

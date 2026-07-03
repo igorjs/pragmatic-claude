@@ -21,9 +21,12 @@ if [[ -n "$reason" && "$reason" != "other" ]]; then
   : > "$dir/clean-exit" 2>/dev/null
   printf '%s\n' "$reason" > "$dir/clean-exit"
 
-  # SessionEnd only (Stop has no .reason): last-chance memory flush reminder.
-  jq -cn --arg msg "If you learned any durable facts this session not yet in ~/.claude/memory/, persist them now per the Memory section of the system prompt." '
-    { hookSpecificOutput: { hookEventName: "SessionEnd", additionalContext: $msg } }' 2>/dev/null
+  # SessionEnd is side effects only: its stdout goes to the debug log and cannot
+  # inject context, so emitting hookSpecificOutput.additionalContext here fails
+  # output validation (only SessionStart/UserPromptSubmit/PostToolUse/Stop/etc.
+  # accept additionalContext). Memory persistence is the model's job during the
+  # session (system prompt Memory section); the auto-learn queue below nudges the
+  # next session.
 
   # ── Auto-learn queue ──
   # If this session did substantive work in a repo, drop a per-repo flag so the
