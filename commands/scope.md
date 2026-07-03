@@ -122,6 +122,8 @@ First question: [question]? **I'd recommend [X]** because [reason from codebase]
 
 ### Step 2: Decision Tree Interview
 
+If a `/brainstorm` design doc with a "Confidence + open items" trailer exists for this work, read its open items and aim the interview at them first; those are the premises brainstorm couldn't fully verify.
+
 Ask questions one at a time. Each question should follow from the previous answer (don't jump topics), include your recommended answer with reasoning, and resolve a specific branch.
 
 Types of questions, in roughly this order (adapt):
@@ -204,6 +206,12 @@ For each WU, in dependency order:
 
 ### Testing Strategy
 - [What to test, which test files, what assertions]
+
+## Confidence + open items
+
+- Confidence: HIGH | MEDIUM | LOW — <one line on what makes it that>
+- Open items (verify downstream):
+  - <blind spot or LOW-confidence premise> — <who verifies: /scope interview, /implement watch>
 ```
 
 The Testing Strategy MUST follow the `engineering-standards` skill (test types, isolation, TDD red/green/refactor, no coverage decrease).
@@ -232,7 +240,17 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the full plan and the
 - The test infrastructure the plan assumes actually exists.
 - The Work Unit dependency graph is acyclic, and each Parallel group's WUs have disjoint files with no dependency on each other (the parallel-safe flags are accurate).
 
-Returns a structured PASS / FAIL / WARN report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
+Returns a structured PASS / FAIL / WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
+
+## Verification Summary
+
+| Referenced path | Confirmed? | Where used |
+|---|---|---|
+| <path> | Yes (Read) / No (not found) | WU-N |
+
+Confidence: HIGH | MEDIUM | LOW
+
+Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
 
 #### Phase 2: Adversarial Review
 
@@ -272,6 +290,8 @@ Present all three reports:
 ```
 
 WARNs are shown for awareness but do not block.
+
+- **INCONCLUSIVE** — a phase returns INCONCLUSIVE, not PASS, when it couldn't actually perform its check: the agent failed to run or returned nothing, the target files were unreadable, or its confidence is LOW and blind spots dominate so a PASS would be unsupported. INCONCLUSIVE blocks the save exactly like FAIL and re-runs on the same max-3 loop; it's labeled distinctly so the cause reads as "couldn't verify," not "found a problem." A gate that checked nothing MUST NOT read PASS.
 
 ### Step 6: User Approval
 
