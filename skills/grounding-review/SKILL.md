@@ -7,7 +7,7 @@ description: Use when reviewing a pull request or code change. Covers severity c
 
 Discipline for reviewing pull requests. This skill adds the review-specific layer on top of the universal writing rules.
 
-MUST load the `writing-style` skill alongside this one. Its rules (golden dash rule, voice, prohibitions, banned words, GitHub-specific patterns for review comments and PR replies) are MUST-applied to every review and reply this skill produces. The review-specific sections below ("Voice for Reviews", "Inline GitHub Comment Brevity", etc.) layer on top; where they repeat a `writing-style` rule, it's for emphasis on the most-violated points, not a replacement.
+MUST load the `writing-style` skill alongside this one. Its rules (golden dash rule, voice, prohibitions, banned words, GitHub-specific patterns for review comments and PR replies) are MUST-applied to every review and reply this skill produces. The review-specific sections below ("Voice for Reviews", "Review Report Format", etc.) layer on top; where they repeat a `writing-style` rule, it's for emphasis on the most-violated points, not a replacement.
 
 **Register precedence.** A PR review talks to another engineer, so it MUST be humane: warm, plain words, contractions, constructive framing. That comes from `writing-style`. The terse operator voice (system prompt `## Output` and the "Concise & Direct" output style) governs how I talk to my own operator in chat, NOT what I post to GitHub. For any review content, reply, or comment body, `writing-style` wins over that operator voice. Don't strip the contractions and warmth to sound concise.
 
@@ -23,62 +23,6 @@ You're a senior engineer leaving a review for a teammate. Simple, direct sentenc
 
 Full voice rules in `writing-style` skill.
 
-### Inline GitHub Comment Brevity
-
-Inline comments live forever on a diff line. They MUST be tight. This is the single most-violated rule when LLM-drafted reviews are posted to GitHub.
-
-**Format**: `<label> (<decoration>): <body>`
-
-Plain text, NO bold around the label. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Bold labels are an LLM tell.
-
-**Body length**:
-- Non-blocking findings: **1-2 sentences. Hard cap.** (Mirrors writing-style: one sentence ideal, two max.)
-- Blocking findings: MAY run longer because there's a decision to argue, but still no diff-restating.
-- Optional ` ```suggestion ``` ` block where the fix is mechanical.
-
-**Anti-patterns. Refuse to write any of these:**
-
-1. **Diff restatement.** "This function moves X into Y so that...". The author wrote the code; they know what it does. Lead with the finding.
-2. **Hedging stack.** "may actually be", "I'd lean toward", "that said", "worth noting", "one could argue", "it's worth mentioning". State the call.
-3. **Meta-justification.** "since X is a foot-gun" / "because Y is bad practice" is reviewer-reasoning. The recommendation is enough; trust the reader.
-4. **Bullet lists inside an inline comment.** If you reach for bullets in a 2-sentence finding, the finding is too big. Split or simplify.
-5. **Full-paragraph formal register.** Inline comments are casual. Fragments OK. Lowercase verbs fine.
-6. **Fence-sitting between fixes.** "Tighten the README, or stamp a sentinel" hands the decision back to the author. Pick the one pragmatic fix and state it. If both are equally valid, prefer the smallest diff.
-7. **Quoting source material.** Paraphrasing the README claim or the code in your comment is almost always shorter and clearer than block-quoting it.
-8. **Intermediate-state padding.** "ship a blank X to the CSV" can be "X is blank". "is left undefined and the column shows empty" can be "is blank".
-9. **Restating the file path in the body.** The comment is already anchored to a line. Don't repeat `at line 364` AND `(remediate-memberships.ts:364)` in the same comment.
-10. **Consequence + cause restatement.** If you state the cause, trust the reader to infer the consequence. "X is undefined" implies "downstream readers see nothing". You don't need both.
-
-**Before / After.**
-
-❌ 6 sentences:
-
-> **issue (non-blocking):** Flake risk. This leans on real `setTimeout(5)` plus wall-clock advance to make `first.x !== second.x` at line 934. On a loaded CI box that clamps short timers, the two `new Date().toISOString()` calls can land in the same millisecond and the assertion fails. Deterministic alternative: `jest.spyOn(Date, 'now').mockReturnValueOnce(t1).mockReturnValueOnce(t2)`, or assert the structural property (both defined, ISO-shaped) instead of inequality.
-
-✅ 2 sentences, one pragmatic fix:
-
-> **issue (non-blocking):** `setTimeout(5)` can land both `Date.now` calls in the same ms on loaded CI; the inequality at 934 flakes. mock `Date.now` per call.
-
-❌ 8 sentences + blockquote (verbose):
-
-> **issue (non-blocking):** Audit gap in the history-merge branch. `plannedCloseDate` is only assigned in the `else` branch (line 364). When `allPeriods.length > 0`, the orphan is removed by full replacement and `plannedCloseDate` stays `undefined`, so the CSV row carries an empty `Planned Close Date` even though the API call did happen. That may actually be semantically correct (no single "planned close timestamp" exists for the replacement path), but the README now promises:
->
-> > the audit captures what was attempted even when the API call failed
->
-> Either tighten the README to spell out that the history-merge path leaves `Planned Close Date` blank because the orphan is removed by replacement, or record a sentinel here. I'd lean toward the README tightening plus a one-line code comment, since a non-timestamp string in a timestamp column is its own foot-gun.
-
-✅ 2 sentences, one pragmatic fix, paraphrased not quoted:
-
-> **issue (non-blocking):** merge-path success leaves `plannedCloseDate` blank (only set in the `else` at line 364). README overpromises; tighten the claim.
-
-### Report vs Inline format
-
-Two different audiences, two different formats:
-
-- **Report** (shown to the user in the conversation): use the structured `Findings Format` below with Severity / File / Evidence / Fix fields. The user is making decisions about which to post.
-- **Inline** (posted to GitHub as review comments): use the condensed `**label (decoration):**` + 1-3 sentence body above. The PR author is reading on a diff line.
-
-Never paste the structured report format into a GitHub inline comment. Never strip the structured format from the user-facing report.
 
 ## Evidence Rules
 
@@ -103,37 +47,50 @@ Different claims require different levels of proof:
 
 Claims without supporting proof MUST be tagged `[unverified]`.
 
-## Findings Format
+## Review Report Format
+
+Both `/quick-review` and `/deep-review` render this exact structure. The only difference: `/deep-review` includes the `### Reviewers` line; `/quick-review` omits it. The `·` separators are the middle dot U+00B7, not a dash.
+
+### Report skeleton
 
 ```
-### <label> (<decoration>): <subject>
-**Severity:** <critical | high | medium | low>
-**File:** <verified file path>:<verified line number>
-**Evidence:** <exact code quote from the file>
-**Fix:** <exact change required>
+## PR #<number>: <title>
+<N> files · +<additions> -<deletions> · <VERDICT> · confidence <HIGH|MEDIUM|LOW>
 
-<discussion: why it matters, then what to do about it (2-3 sentences, no more)>
+### Overview
+<1 to 3 sentences, human voice, why the verdict>
+
+### Reviewers
+<deep-review only: lens roll-up, e.g. "security 2 · logic 1 · perf 0 · tests 1">
+
+### Findings
+<numbered finding blocks, ordered blocking, then non-blocking, then suggestion, then nitpick>
+
+### Verification Summary
+| File | Read | Lines | Findings |
+| <path> | Yes / No | <lines> | <finding numbers, or a dash> |
+
+Verdict: <APPROVE | REQUEST_CHANGES | COMMENT | INCONCLUSIVE> · confidence <HIGH|MEDIUM|LOW>
 ```
 
-Valid labels: `issue`, `suggestion`, `question`, `thought`, `nitpick`, `todo`
-Valid decorations: `(blocking)`, `(non-blocking)`, `(if-minor)`
+### Finding block
 
-### When to use `(blocking)`
+```
+N. <label> (<decoration>): <one-line subject naming the consequence>
+   `<file>:<line>` · <category> · <HIGH|MEDIUM|LOW>
+   <1 to 2 sentence body: the problem and the real-world consequence>
+   Post:
+   ```text
+   <label> (<decoration>): <exact GitHub comment body, 1 to 2 sentences>
+   ```
+```
 
-PR MUST NOT merge without resolving. Includes:
-
-- Immediate risks: bugs, security vulnerabilities, data loss, production outages.
-- Deferred risks without mitigation: PR acknowledges future problem but has no concrete follow-up (no ticket, no retention strategy, no timeline). Untracked acknowledged risks WILL be forgotten.
-- Factual errors: wrong file paths, broken links, incorrect code references.
-- Deployment safety: migration sequences where the described order can cause production failures (e.g., SET NOT NULL before app code handles NULLs).
-
-### When to use `(non-blocking)`
-
-Valid finding, but PR is safe to merge without it. Either already mitigated (follow-up ticket exists, monitoring in place) or low enough impact to defer.
-
-### `suggestion` vs `issue`
-
-Suggestion: code works, could be better (style, naming, structure, readability). Issue: code is wrong or dangerous. NEVER classify as `suggestion` something that can cause production failure, data loss, or mislead the reader into a broken state.
+- Labels: `issue`, `suggestion`, `question`, `thought`, `nitpick`, `todo`. Decorations: `(blocking)`, `(non-blocking)`, `(if-minor)`.
+- Subject names the consequence, not a rule: "user input runs as SQL", not "SQL injection".
+- Location line: `` `file:line` `` then category (security, logic, perf, tests, types, data, maintainability, and so on) then confidence, `·`-separated.
+- Body: 1 to 2 sentences. The why is part of the sentence, not a separate paragraph. No bullet lists inside a finding.
+- `Post:` block: the exact comment that goes to GitHub. Plain text, label in plain text never `**bold**`, 1 to 2 sentences, no `file:line` prefix (GitHub anchors it). It MAY contain a ```suggestion``` block when the fix is mechanical. The posting step sends this block verbatim as the comment body.
+- Report-only finding (evidence not on a changed diff line, so no inline anchor): omit the `Post:` block and end with `Report-only: not on a changed line, no inline draft.`
 
 ## Severity
 
