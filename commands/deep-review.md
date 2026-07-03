@@ -211,28 +211,7 @@ Merge all findings, then (this is where removals happen):
 
 ## Step 5: Present the consolidated report
 
-Present ALL surviving findings (rule 7), using the `/quick-review` report shape:
-
-```
-## PR #<number>: <title>
-<files> | +<additions> -<deletions>
-
-### Overview
-1-3 sentences, human voice.
-
-### Reviewers
-Which reviewers ran, and findings per reviewer (e.g. security: 2, logic: 1, perf: 0).
-
-### Findings
-Numbered, ordered blocking > non-blocking > suggestion > nitpick. Per finding:
-- **<label> (<decoration>):** `<file>:<line>`  [confidence]
-  <1-2 sentence body in the voice rules>
-
-### Verification Summary
-| File | Read? | Lines verified | Findings |
-
-**Verdict:** <...>  **Confidence:** <...>
-```
+Present ALL surviving findings (rule 7). Render the `grounding-review` Review Report Format exactly, INCLUDING the `### Reviewers` line (which reviewers ran, findings per reviewer, e.g. "security 2 · logic 1 · perf 0"). Each finding carries its `Post:` block (the exact GitHub comment), or `Report-only: not on a changed line, no inline draft.` when the evidence is not on a changed diff line.
 
 ## Step 6: Orchestrate posting
 
@@ -241,7 +220,7 @@ If `--self` (or self-review with nothing postable), stop here: the report IS the
 Otherwise ask **one question at a time**:
 
 - **Q1:** "Post which findings as a pending review? all / none / a subset (numbers)." If `none`, stop.
-- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text Conventional Comment label, no review `body`), then create the pending review:
+- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text Conventional Comment label, no review `body`). Build each inline comment's `body` from that finding's `Post:` block verbatim, anchored to the finding's `file:line`. What the user read in the report is exactly what posts. Skip any finding marked `Report-only`. Then create the pending review:
 
 ```bash
 gh api -X POST /repos/$REPO/pulls/$PR_NUMBER/reviews --input "$REVIEW_JSON" --jq '{id, state, html_url}'
