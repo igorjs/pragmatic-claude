@@ -169,7 +169,7 @@ Build a JSON payload at `$REVIEW_JSON` (`/tmp/<org>/<repo>/quick-review-<number>
 {
   "commit_id": "<HEAD_SHA>",
   "comments": [
-    {"path": "...", "line": N, "side": "RIGHT", "body": "**label (decoration):** ..."},
+    {"path": "...", "line": N, "side": "RIGHT", "body": "label (decoration): ..."},
     {"path": "...", "start_line": N, "start_side": "RIGHT", "line": M, "side": "RIGHT", "body": "..."}
   ]
 }
