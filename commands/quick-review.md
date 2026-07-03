@@ -52,7 +52,7 @@ Invoke the `grounding-review` skill before drafting any finding, and load the `w
 
 Comment bodies are read by another engineer, so they use the humane `writing-style` register (warm, contractions, constructive), NOT the terse operator voice from the "Concise & Direct" output style or system prompt `## Output`. Where those would conflict, `writing-style` wins for anything posted to GitHub. The non-negotiable points for inline comments posted to GitHub:
 
-- **Conventional Comments label + decoration on every finding, PLAIN TEXT (no bold).** Start the body with `issue (non-blocking):`, `suggestion:`, `nitpick:`. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Valid labels: `issue`, `suggestion`, `nitpick`, `question`, `thought`, `todo`. Valid decorations: `(blocking)`, `(non-blocking)`, `(if-minor)`.
+- **Conventional Comments label + decoration on every finding, PLAIN TEXT (no bold).** Start the body with `issue (non-blocking):`, `suggestion:`, `nitpick:`. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Valid labels: `issue`, `suggestion`, `nitpick`, `question`. Valid decorations: `(blocking)`, `(non-blocking)`.
 - **1-2 sentences for non-blocking findings.** One ideal, two max. Blocking findings MAY run longer because there's a decision to argue.
 - **Pick one pragmatic fix.** No "X, or Y" options. If both work, prefer the smallest diff and recommend that one.
 - **Paraphrase, don't quote.** Block-quoting the README or source code is almost always longer than restating it in your own words.

@@ -206,7 +206,7 @@ Merge all findings, then (this is where removals happen):
 - **Drop out-of-scope:** a finding on a file not in the PR diff is dropped UNLESS the PR's change breaks it (typecheck failure, runtime error, broken import). Preexisting-style nits outside the diff are dropped.
 - **Filter already-addressed:** fetch existing review comments (`gh api --paginate /repos/$REPO/pulls/$PR_NUMBER/comments`), drop findings that duplicate one, and attribute by name ("already raised by @user").
 - **Fact-check (orchestrator):** for each surviving finding, read the file at `HEAD_SHA` and confirm the evidence appears at the cited line; resolve or remove `[unverified]` tags; correct drifted line numbers; drop fabricated findings.
-- **Drop non-actionable:** `thought`/positive observations with no "do X" → always drop; `nitpick` → drop from an APPROVE review unless asked.
+- **Drop non-actionable:** positive observations or asides with no concrete "do X" → always drop; `nitpick` → drop from an APPROVE review unless asked.
 - **Verdict + confidence:** APPROVE / REQUEST_CHANGES / COMMENT / INCONCLUSIVE. **INCONCLUSIVE (never APPROVE)** if the swarm failed to run; say why. Confidence HIGH/MEDIUM/LOW.
 
 ## Step 5: Present the consolidated report
@@ -237,7 +237,7 @@ Never fabricate URLs; use the `html_url` the API returns.
 
 ## Step 7: Capture and wrap up
 
-- Persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks/thoughts and anything not posted.
+- Persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks and anything not posted.
 - If non-self-review and the PR has unaddressed review threads, offer to run `/address-pr-comments $PR_NUMBER`.
 - Final message: one line per outcome (pending review id + count, or submitted verb + timestamp).
 

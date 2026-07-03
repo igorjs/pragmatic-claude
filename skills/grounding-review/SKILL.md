@@ -85,7 +85,7 @@ N. <label> (<decoration>): <one-line subject naming the consequence>
    ```
 ```
 
-- Labels: `issue`, `suggestion`, `question`, `thought`, `nitpick`, `todo`. Decorations: `(blocking)`, `(non-blocking)`, `(if-minor)`.
+- Labels: `issue`, `suggestion`, `question`, `nitpick`. Decorations: `(blocking)`, `(non-blocking)`.
 - Subject names the consequence, not a rule: "user input runs as SQL", not "SQL injection".
 - Location line: `` `file:line` `` then category (security, logic, perf, tests, types, data, maintainability, and so on) then confidence, `·`-separated.
 - Body: 1 to 2 sentences. The why is part of the sentence, not a separate paragraph. No bullet lists inside a finding.
