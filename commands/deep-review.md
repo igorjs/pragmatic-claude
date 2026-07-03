@@ -195,6 +195,8 @@ Instruct each to:
 
 Collect every reviewer's JSON. If a reviewer returns nothing, record it ran with zero findings (not a failure).
 
+**Close each reviewer the moment it returns (MUST).** Spawn each with a stable `name` (e.g. `dr-<focus>`: `dr-security`, `dr-logic`). As soon as a reviewer returns its JSON, `TaskStop` it. The swarm is one-shot, so a returned reviewer is never reused; a spawned agent stays idle-alive for `SendMessage` follow-ups, so leaving it unstopped keeps a subagent running in the background. Track the spawned names so Step 8 can sweep any that didn't return.
+
 ## Step 4: Consolidate and fact-check
 
 Merge all findings, then (this is where removals happen):
@@ -262,7 +264,9 @@ Never fabricate URLs; use the `html_url` the API returns.
 
 ## Step 8: Teardown (MUST run — even on failure, abort, or skip)
 
-If `WT_CREATED` is true, always run:
+**Stop every reviewer subagent first.** `TaskStop` each reviewer spawned in Step 3 that is still alive (any you didn't already close on return). Use `TaskList` to confirm none from this swarm are still running before you finish. A returned agent stays idle-alive for follow-ups and this review never sends any, so an unstopped reviewer lingers as a background process. Do this whether the review completed, failed, was skipped, or aborted mid-swarm.
+
+Then, if `WT_CREATED` is true, always run:
 
 ```bash
 bash "$HOME/.claude/shell/review-worktree.sh" teardown "$WT"
