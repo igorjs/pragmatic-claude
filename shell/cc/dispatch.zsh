@@ -3,11 +3,12 @@
 # cc module: _claude dispatcher
 #
 # Drop-in replacement for the original _claude that adds subcommand dispatch
-# (clean / fresh / raw / list) while preserving the resume-by-customTitle
-# default. All non-subcommand args (including --dangerously-skip-permissions
-# from ccd) are passed through to `command claude` unchanged.
+# (clean / fresh / raw / list / worktree, alias new) while preserving the
+# resume-by-customTitle default. All non-subcommand args (including
+# --dangerously-skip-permissions from ccd) are passed through to
+# `command claude` unchanged.
 #
-# Depends on: bust-cache, config-drift, sessions, clean-resume modules.
+# Depends on: bust-cache, config-drift, sessions, clean-resume, worktree modules.
 _claude() {
     emulate -L zsh 2>/dev/null || true
     _cc_bust_cache
@@ -84,13 +85,14 @@ _claude() {
             _cc_list_sessions "$project_dir"
             return $?
             ;;
-        worktree|--worktree)
+        worktree|--worktree|new|--new)
             shift
-            # cc/ccd worktree <branch>: create or enter a git worktree (off the
-            # project's base branch for a new branch), then launch a session in
-            # it. This path always passes --ai-resolve, so Claude resolves any
-            # rebase conflicts. worktree() cd's us into the new tree; recursing
-            # into _claude with just the leading flags does the normal launch.
+            # cc/ccd worktree <branch> (alias: cc new <branch>): create or enter a
+            # git worktree (off the project's base branch for a new branch), then
+            # launch a session in it. This path always passes --ai-resolve, so
+            # Claude resolves any rebase conflicts. worktree() cd's us into the new
+            # tree; recursing into _claude with just the leading flags does the
+            # normal launch.
             _cc_worktree --ai-resolve "$@" || return $?
             _claude "${flags[@]}"
             return $?
