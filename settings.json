@@ -13,6 +13,7 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
+      "Task(subagent_type:*)",
       "Task(Explore)",
       "TaskOutput",
       "Bash",
@@ -28,17 +29,11 @@
       "WebSearch",
       "TodoWrite",
       "KillShell",
-      "AskUserQuestion",
       "Skill",
       "MCPSearch",
+      "AskUserQuestion",
       "ListMcpResourceTool",
       "ReadMcpResourceTool",
-      "Task(subagent_type:*)",
-      "WebFetch(domain:docs.python.org)",
-      "WebFetch(domain:canary.nx.dev)",
-      "WebFetch(domain:nx.dev)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:docs.github.com)",
       "Write(~/Workspace/**)",
       "Write(/tmp/**)",
       "Read(/tmp/**)",
@@ -87,11 +82,7 @@
       "Bash(psql:*)",
       "Bash(source:*)"
     ],
-    "deny": [
-      "Read(**/.env)",
-      "Read(**/.env.*)",
-      "Read(**/node_modules/**)"
-    ],
+    "deny": ["Read(**/.env)", "Read(**/.env.*)", "Read(**/node_modules/**)"],
     "ask": [
       "Bash(git reset:*)",
       "Bash(git push --force:*)",
@@ -228,6 +219,7 @@
   "outputStyle": "Concise & Direct",
   "feedbackSurveyRate": 0,
   "spinnerTipsEnabled": false,
+  "prefersReducedMotion": true,
   "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "stable",
