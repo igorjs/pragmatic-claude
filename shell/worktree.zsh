@@ -416,8 +416,8 @@ _cc_worktree() {
 # Private entry point for `cc workspace <ticket>` / `cc new <ticket>` (called
 # only by the _claude dispatcher). A thin wrapper over _cc_worktree that names
 # the branch "<github-user>/<ticket>", e.g. `cc new PROJ-1234` -> branch
-# igorjs/PROJ-1234 (folder PROJ-1234, from the JIRA key). Falls back to the bare
-# ticket when no username resolves. All flags (e.g. --ai-resolve) and the
+# <github-user>/PROJ-1234 (folder PROJ-1234, from the JIRA key). Falls back to
+# the bare ticket when no username resolves. All flags (e.g. --ai-resolve) and the
 # optional env-base-folder pass straight through to _cc_worktree.
 _cc_workspace() {
     emulate -L zsh 2>/dev/null || true

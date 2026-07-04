@@ -40,7 +40,7 @@
 #   cc workspace <ticket> [env-base]   (alias: cc new <ticket>)
 #                     Like worktree, but names the branch "<github-user>/<ticket>"
 #                     (bare <ticket> if no GitHub user resolves). E.g.
-#                     `cc new PROJ-1234` -> branch igorjs/PROJ-1234, folder PROJ-1234.
+#                     `cc new PROJ-1234` -> branch <github-user>/PROJ-1234, folder PROJ-1234.
 #
 #   ccd <any of the above>: same dispatch, with --dangerously-skip-permissions.
 #

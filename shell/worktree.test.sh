@@ -50,10 +50,10 @@ assert_captured() {
 
 # 1. Ticket is prefixed with the resolved GitHub username.
 test_username_prefix() {
-    CC_GH_USER=igorjs
+    CC_GH_USER=octocat
     _cc_workspace --ai-resolve PROJ-1234 || return 1
     unset CC_GH_USER
-    assert_captured "--ai-resolve igorjs/PROJ-1234"
+    assert_captured "--ai-resolve octocat/PROJ-1234"
 }
 
 # 2. No username resolves -> bare ticket, no prefix (the documented fallback).
@@ -65,23 +65,23 @@ test_bare_fallback() {
 
 # 3. An optional env-base-folder passes through as the engine's 2nd positional.
 test_env_base_passthrough() {
-    CC_GH_USER=igorjs
+    CC_GH_USER=octocat
     _cc_workspace --ai-resolve PROJ-1234 backend || return 1
     unset CC_GH_USER
-    assert_captured "--ai-resolve igorjs/PROJ-1234 backend"
+    assert_captured "--ai-resolve octocat/PROJ-1234 backend"
 }
 
 # 4. Extra flags pass straight through, in order, ahead of the branch.
 test_extra_flags_passthrough() {
-    CC_GH_USER=igorjs
+    CC_GH_USER=octocat
     _cc_workspace --ai-resolve --foo PROJ-1234 || return 1
     unset CC_GH_USER
-    assert_captured "--ai-resolve --foo igorjs/PROJ-1234"
+    assert_captured "--ai-resolve --foo octocat/PROJ-1234"
 }
 
 # 5. Missing ticket -> usage error, engine never invoked.
 test_missing_ticket() {
-    CC_GH_USER=igorjs
+    CC_GH_USER=octocat
     _cc_workspace --ai-resolve 2>/dev/null
     local rc=$?
     unset CC_GH_USER

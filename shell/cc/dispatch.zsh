@@ -100,7 +100,7 @@ _claude() {
             shift
             # cc/ccd workspace|new <ticket>: like worktree, but names the branch
             # "<github-user>/<ticket>" (bare ticket if no user resolves), so
-            # `cc new PROJ-1234` -> branch igorjs/PROJ-1234. Delegates to the
+            # `cc new PROJ-1234` -> branch <github-user>/PROJ-1234. Delegates to the
             # worktree engine (which cd's us in), then launches a session there.
             _cc_workspace --ai-resolve "$@" || return $?
             _claude "${flags[@]}"
