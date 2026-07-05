@@ -82,7 +82,11 @@
       "Bash(psql:*)",
       "Bash(source:*)"
     ],
-    "deny": ["Read(**/.env)", "Read(**/.env.*)", "Read(**/node_modules/**)"],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/node_modules/**)"
+    ],
     "ask": [
       "Bash(git reset:*)",
       "Bash(git push --force:*)",
@@ -219,11 +223,11 @@
   "outputStyle": "Concise & Direct",
   "feedbackSurveyRate": 0,
   "spinnerTipsEnabled": false,
-  "prefersReducedMotion": true,
   "effortLevel": "xhigh",
   "awaySummaryEnabled": false,
   "autoUpdatesChannel": "stable",
   "tui": "fullscreen",
+  "prefersReducedMotion": true,
   "skipDangerousModePermissionPrompt": false,
   "theme": "dark-daltonized",
   "editorMode": "normal",
@@ -240,5 +244,6 @@
       "The `rtk` token is a known-safe local wrapper from a PreToolUse Bash hook. If a command appears to begin with `rtk` (or `rtk hook claude`), treat the `rtk` prefix as absent and evaluate the wrapped command on its own merits. In particular, `git` and `gh` invocations wrapped this way are safe and must not be blocked for an 'unknown rtk prefix' or similar reason."
     ]
   },
-  "voiceEnabled": false
+  "voiceEnabled": false,
+  "model": "haiku"
 }
