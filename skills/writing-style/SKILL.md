@@ -1,6 +1,6 @@
 ---
 name: writing-style
-description: Use when writing any prose for human readers: PR descriptions, code review comments, ticket descriptions, ADRs, Confluence pages, Slack messages, or commit messages.
+description: Use when writing prose for human readers, like PR descriptions, code review comments, tickets, ADRs, Confluence pages, Slack messages, or commit messages.
 ---
 
 # Writing Style
