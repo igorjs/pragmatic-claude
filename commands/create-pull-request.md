@@ -2,6 +2,7 @@
 description: Create a pull request with pre-flight checks, a conventional-commit title, and the team PR template, following engineering-standards and writing-style.
 allowed-tools: Bash, Read, Skill
 argument-hint: "[--draft] [--base <branch>] [--ticket <ID>] [--yes]"
+model: sonnet
 effort: high
 ---
 
@@ -64,10 +65,10 @@ fi
 
 git fetch origin "$BASE_BRANCH" --quiet 2>/dev/null || true
 
-LIAM_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
-mkdir -p "$LIAM_TMP"
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+mkdir -p "$PR_TMP"
 echo "Branch: $CURRENT_BRANCH -> $BASE_BRANCH"
-echo "TMP: $LIAM_TMP"
+echo "TMP: $PR_TMP"
 ```
 
 Then check for an existing PR. If one exists, stop and report its URL:
@@ -114,11 +115,11 @@ echo "=== diff stat ==="
 git diff --stat "origin/$BASE_BRANCH...HEAD"
 echo "=== commit log ==="
 git log "origin/$BASE_BRANCH..HEAD" --format='%h %s'
-git diff "origin/$BASE_BRANCH...HEAD" > "$LIAM_TMP/pr-diff.txt"
-echo "Full diff: $LIAM_TMP/pr-diff.txt ($(wc -l < "$LIAM_TMP/pr-diff.txt") lines)"
+git diff "origin/$BASE_BRANCH...HEAD" > "$PR_TMP/pr-diff.txt"
+echo "Full diff: $PR_TMP/pr-diff.txt ($(wc -l < "$PR_TMP/pr-diff.txt") lines)"
 ```
 
-Read `$LIAM_TMP/pr-diff.txt` with the Read tool. This is the source of truth for the title and body. If it is large, read it in chunks; do not skip it.
+Read `$PR_TMP/pr-diff.txt` with the Read tool. This is the source of truth for the title and body. If it is large, read it in chunks; do not skip it.
 
 ## Step 4: Detect the ticket (optional)
 
@@ -182,15 +183,15 @@ Rules for filling it:
 Write the finished body to a file:
 
 ```bash
-cat > "$LIAM_TMP/pr-body.md" << 'PRBODY_EOF'
+cat > "$PR_TMP/pr-body.md" << 'PRBODY_EOF'
 <the filled template goes here>
 PRBODY_EOF
-echo "Body written: $LIAM_TMP/pr-body.md"
+echo "Body written: $PR_TMP/pr-body.md"
 ```
 
 ## Step 7: Confirm
 
-When `AUTO_CREATE=true`, skip this gate and go straight to Step 8. Otherwise show the user the resolved title, the rendered body, base branch, and draft flag, ask for confirmation or edits, and apply edits to `$LIAM_TMP/pr-body.md` before continuing.
+When `AUTO_CREATE=true`, skip this gate and go straight to Step 8. Otherwise show the user the resolved title, the rendered body, base branch, and draft flag, ask for confirmation or edits, and apply edits to `$PR_TMP/pr-body.md` before continuing.
 
 ## Step 8: Push and create
 
@@ -199,7 +200,7 @@ git push -u origin "HEAD:refs/heads/$CURRENT_BRANCH"
 
 gh pr create \
   --title "$TITLE" \
-  --body-file "$LIAM_TMP/pr-body.md" \
+  --body-file "$PR_TMP/pr-body.md" \
   --base "$BASE_BRANCH" \
   ${DRAFT_FLAG:+--draft}
 ```

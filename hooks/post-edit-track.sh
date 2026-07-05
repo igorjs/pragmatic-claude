@@ -25,11 +25,23 @@ ts="$(date +%s)"
 line="$(jq -cn --arg p "$abs" --argjson t "$ts" '{path:$p, ts:$t}')"
 atomic_append "$dir/edits.jsonl" "$line"
 
+# Atomic counter increment using mkdir spinlock (macOS-safe, no flock needed).
+_incr_counter() {
+  local file="$1"
+  local lock="${file}.lock"
+  local i=0
+  until mkdir "$lock" 2>/dev/null || [ "$i" -ge 50 ]; do
+    sleep 0.01; i=$((i+1))
+  done
+  local n
+  n="$(cat "$file" 2>/dev/null || echo 0)"
+  n=$((n + 1))
+  printf '%s' "$n" > "${file}.tmp.$$" && mv "${file}.tmp.$$" "$file"
+  rmdir "$lock" 2>/dev/null
+}
+
 # Bump human-readable edit count (used by statusline).
 count_file="$dir/edit-count"
-n="$(cat "$count_file" 2>/dev/null || echo 0)"
-n=$((n + 1))
-tmp="${count_file}.tmp.$$"
-printf '%s' "$n" > "$tmp" && mv "$tmp" "$count_file"
+_incr_counter "$count_file"
 
 exit 0

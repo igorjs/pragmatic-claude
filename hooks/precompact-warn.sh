@@ -14,9 +14,12 @@ trigger="$(hi_field '.trigger')"
 sid="$(hi_session_id)"
 ts="$(date '+%Y-%m-%d %H:%M:%S')"
 
-# Log to a flat file for later review.
+# Log to a flat file for later review. Cap at 500 lines to prevent unbounded growth.
 log="${RUNTIME_ROOT}/compactions.log"
 printf '%s\tsession=%s\ttrigger=%s\n' "$ts" "$sid" "${trigger:-unknown}" >> "$log" 2>/dev/null
+if [ "$(wc -l < "$log" 2>/dev/null || echo 0)" -gt 500 ]; then
+  tail -n 500 "$log" > "${log}.tmp.$$" && mv "${log}.tmp.$$" "$log"
+fi
 
 user_msg="⚠ Context compaction triggered (${trigger:-auto}). After this point, every turn replays a lossy summary instead of the original transcript, so the cache savings are gone. Strongly consider: finish the current step, ask me to wrap up (a session handoff), then /clear for a fresh session."
 

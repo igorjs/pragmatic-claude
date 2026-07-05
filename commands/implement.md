@@ -1,6 +1,6 @@
 ---
 description: Execute an approved plan or ADR blueprint (from /scope or /adr) on Sonnet, delegating edits to subagents and committing each unit. Then runs one refinement pass (self quick-review + SOLID/DRY/KISS/YAGNI simplify, re-planned and executed autonomously) and an adversarial review. Execute-only; it does not design new scope.
-allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Task
+allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Task, Skill
 argument-hint: "[plan | adr-blueprint | #issue | KEY-123 | ./spec.md | text] [--auto] [--no-tdd] [--force] [--help]"
 model: sonnet
 effort: xhigh

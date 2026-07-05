@@ -67,6 +67,7 @@ Per-session state lives in `~/.claude/runtime/<session_id>/`. The session dir ho
 | Matcher | Script | Purpose |
 |---|---|---|
 | `Edit`, `Write`, `NotebookEdit` | `post-edit-track.sh` | Appends the edited file's absolute path and timestamp to `edits.jsonl` in the session runtime dir. Increments the edit counter for the statusline. |
+| `Edit`, `Write`, `NotebookEdit` | `rebuild-memory-graph.sh` | Rebuilds `~/.claude/memory/graph.json` after memory edits. |
 
 ### UserPromptSubmit
 
@@ -87,10 +88,6 @@ Both events wire to the same script.
 | Script | Purpose |
 |---|---|
 | `session-clean-exit.sh` | On `Stop` (after every assistant turn), refreshes `last-clean-ts`. On `SessionEnd`, writes a clean-exit marker and emits a memory-flush reminder to Claude so durable facts get persisted before the session closes. |
-
-### Unwired scripts
-
-`hooks/plan-mode-enter.sh` exists in the hooks directory but isn't wired in `settings.json`. It sets `model` to `opus` and `effortLevel` to `xhigh` in `settings.json` when Plan mode is entered. To enable it, add it as a `PreToolUse` hook matching `EnterPlanMode`.
 
 ## See also
 

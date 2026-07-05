@@ -1,9 +1,9 @@
 ---
 description: Quick single-pass PR review (or current branch self-review) using grounding-review discipline + Conventional Comments. Posts findings as a pending GitHub review for human submit.
-allowed-tools: Bash, Read, Grep, Glob, Write
+allowed-tools: Bash, Read, Grep, Glob, Write, Skill
 argument-hint: "[PR number]"
 model: opus
-effort: max
+effort: high
 ---
 
 # Quick Review
@@ -39,6 +39,7 @@ In self-review mode (no argument), the in-place predicate runs the same check. I
 **Worktree mode** (all other cases): set up an isolated worktree:
 
 ```bash
+[ -x "$HOME/.claude/shell/review-worktree.sh" ] || { echo "error: review-worktree.sh not found under \$HOME/.claude/shell/; install the repo's shell/ directory" >&2; exit 1; }
 WT="$(bash "$HOME/.claude/shell/review-worktree.sh" setup "$PR_NUMBER" "$HEAD_SHA" 2>&1)"
 ```
 

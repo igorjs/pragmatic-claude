@@ -1,6 +1,6 @@
 ---
-description: Create architecture decision records (ADRs) with an optional execution blueprint, fact-checked through a 3-phase quality gate and saved to .claude/adr/.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task
+description: Use when recording a significant, hard-to-reverse architectural decision. Creates a fact-checked ADR with an optional execution blueprint and saves it to .claude/adr/.
+allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Task, Skill
 argument-hint: "<topic> [--record-only] [--list] [--help]"
 model: opus
 effort: xhigh

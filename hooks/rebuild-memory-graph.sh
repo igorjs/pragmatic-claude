@@ -96,7 +96,7 @@ for dirpath, dirnames, filenames in os.walk(MEMORY_DIR):
         rel   = os.path.relpath(fpath, MEMORY_DIR)
         try:
             content = open(fpath, encoding='utf-8').read()
-        except OSError:
+        except (OSError, UnicodeDecodeError, ValueError):
             continue
 
         fm            = parse_frontmatter(content)

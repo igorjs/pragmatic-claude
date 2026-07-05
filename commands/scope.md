@@ -1,6 +1,6 @@
 ---
 description: Interview-driven planning session with deep requirements gathering that produces a verified implementation plan.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task
+allowed-tools: Bash, Read, Grep, Glob, Write, Task, Skill
 argument-hint: "[topic | ./prompt.md | .claude/designs/*.md] [--auto] [--help]"
 model: opus
 effort: xhigh

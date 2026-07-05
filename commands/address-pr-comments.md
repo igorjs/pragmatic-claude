@@ -216,7 +216,7 @@ For each indexed item, do this loop:
      ```
    - For **Both**: queue the reply text and the thread ID; you'll post after commit (Step 6).
 
-6. **Track state.** Maintain a running TodoWrite list with one entry per indexed item, status `fixed | replied | both-queued | skipped`. This is the audit trail.
+6. **Track state.** Keep a running markdown list, one row per indexed item, with status `fixed | replied | both-queued | skipped`. This is the audit trail.
 
 ## Step 5: Pre-commit confirmation
 

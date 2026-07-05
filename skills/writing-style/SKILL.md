@@ -1,6 +1,6 @@
 ---
 name: writing-style
-description: Use when writing PR descriptions, code review comments, ticket descriptions, ADRs, Confluence pages, Slack messages, or any prose intended for human readers. Covers voice (spartan, active, contractions required), prohibitions (banned words, dashes, signposting, copula avoidance), and GitHub-specific patterns for reviews and PR replies.
+description: Use when writing prose for human readers, like PR descriptions, code review comments, tickets, ADRs, Confluence pages, Slack messages, or commit messages.
 ---
 
 # Writing Style
@@ -107,7 +107,7 @@ Real engineers writing PR comments make small mistakes: typos, dropped words, ca
 - Short comments (1-2 sentences): maximum ONE typo.
 - Longer comments (3+ sentences): up to TWO typos are acceptable.
 - Most comments should have zero.
-- Only in discussion prose. NEVER in labels, evidence quotes, code, file paths, fix descriptions, or technical terms.
+- Only in discussion prose. NEVER in labels, evidence quotes, code, file paths, fix descriptions, technical terms, or anything inside backticks or a code block. When in doubt, no typo.
 - Use common human typos: "occuring", "recieve", "definately", "seperate", "accomodate", "dependancy", "existance", "consistant", "neccessary", "occassionally", "wierd", "gaurantee", "priviledge", "succesful".
 - NEVER introduce typos that change meaning (e.g., "not" -> "nt", "public" -> "pubic").
 - NEVER use obviously fake typos (random character insertion, keyboard mashing).
