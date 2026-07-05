@@ -1,6 +1,6 @@
 ---
 description: Divergent discovery session that explores a raw idea, weighs approaches, and produces an approved design doc that hands off to /scope.
-allowed-tools: Task, Read, Bash, Skill, Write, Edit, WebFetch
+allowed-tools: Task, Read, Bash, Grep, Glob, Skill, Write, Edit, WebFetch
 argument-hint: "[idea | PROJ-123 | ./prompt.md] [--ticket <id>] [--depth 0-2] [--adr] [--no-chain] [--help]"
 model: opus
 effort: xhigh
@@ -174,7 +174,7 @@ Ticket: <id and link, if ticket mode; omit otherwise>
 <what's flagged but accepted, and what /scope still needs to decide>
 
 ## Routing note
-<-> /adr for <decision>, or -> /scope>
+<route to /adr for a decision, or to /scope>
 
 ## Confidence + open items
 
