@@ -1,6 +1,6 @@
 ---
 name: grounding-review
-description: Use when reviewing a pull request or code change. Covers severity classification, Conventional Comments labels with blocking/non-blocking decorations, proof ladder for different claim types, structured findings output with File/Evidence/Fix, and the evaluation categories (security, performance, reliability, maintainability, correctness, architecture, scope). Also defines the Verification Summary table required at the end of every review.
+description: Use when reviewing a pull request or code change, whether a quick single pass or a structured deep review. Distinct from grounding-research, which is for investigating code.
 ---
 
 # Review Grounding
@@ -19,7 +19,7 @@ You're a senior engineer leaving a review for a teammate. Simple, direct sentenc
 - Use "we" and "this" instead of "you" and "your code". "this could lead to..." not "you should...".
 - **Skip the praise.** Don't open with compliments. Jump straight to what you found.
 - **MUST use contractions.** "wouldn't" not "would not", "it's" not "it is".
-- For blocking issues, be clear and direct. For suggestions, frame as ideas: "one thing we could do..." or "worth considering...".
+- For blocking issues, be clear and direct. For suggestions, frame as ideas: "one option here..." or "worth considering...".
 
 Full voice rules in `writing-style` skill.
 

@@ -1,6 +1,6 @@
 ---
 name: grounding-research
-description: Use when exploring or investigating codebases, mapping dependencies, tracing execution paths, or producing findings reports. Covers citation rules (every claim sourced to file:line), structured findings output with File and Evidence fields, findings digest format (hypotheses, confidence, blind spots), and scope boundaries for investigations.
+description: Use when exploring or investigating a codebase, tracing execution paths, mapping dependencies, or producing a sourced findings report. Distinct from grounding-review, which is for reviewing PRs.
 ---
 
 # Research Grounding

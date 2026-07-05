@@ -67,12 +67,14 @@ _cc_clean_resume() {
         if .sessionId then .sessionId = $sid else . end
     ' "$new_jsonl" > "$tmp" && mv "$tmp" "$new_jsonl"
 
-    # Mirror the tool-results sidecar dir (symlinks save space; same content).
+    # Copy the tool-results sidecar dir. Copy, not symlink: the harness may write
+    # into the new session's sidecar, and symlinks would leak those writes back
+    # into the original, breaking the "original transcript is untouched" promise.
     if [[ -d "$project_dir/$old_sid" ]]; then
         mkdir -p "$project_dir/$new_sid"
         for f in "$project_dir/$old_sid"/*(N); do
             [[ -e "$f" ]] || continue
-            ln -sf "$f" "$project_dir/$new_sid/${f:t}" 2>/dev/null
+            cp -R "$f" "$project_dir/$new_sid/${f:t}" 2>/dev/null
         done
     fi
 

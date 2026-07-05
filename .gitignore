@@ -13,15 +13,13 @@
 !/prompts/
 !/settings.json
 !/statusline.sh
-!/keybindings.json
-!/CLAUDE.md
-
 !/commands/
 !/skills/
 !/hooks/
 !/shell/
 !/docs/
 !/output-styles/
+!/.github/
 
 # Override the global excludesfile (~/.gitignore.global), which ignores
 # docs/superpowers/ (we want our specs tracked here).

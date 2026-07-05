@@ -166,6 +166,7 @@ scenario_d() {
   unset REVIEW_WT_TTL_SECONDS
 
   [[ $rc -eq 0 ]] || { echo "  setup exited $rc (expected 0)"; return 1; }
+  [[ "$new_wt_path" == /* ]] || { echo "  setup did not print an absolute path: $new_wt_path"; return 1; }
 
   git -C "$repo" worktree list --porcelain | grep -q "^worktree $stale_path$" \
     && { echo "  stale worktree still present after sweep"; return 1; } || true

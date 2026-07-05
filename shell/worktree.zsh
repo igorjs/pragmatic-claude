@@ -23,7 +23,7 @@ _wt_help() {
     print -- 'cc worktree <branch> [env-base-folder]   (also ccd worktree)'
     print -- '  Create or enter a git worktree for <branch> and start a session in it.'
     print -- '  Folder name is the JIRA key in the branch, else the branch leaf.'
-    print -- '  Claude auto-resolves rebase conflicts (this path always sets --ai-resolve).'
+    print -- '  Claude auto-resolves rebase conflicts on your own branches (WORKTREE_AI_RESOLVE=0 disables).'
 }
 
 # md5 (macOS) | md5sum (Linux) -> short stable hash of a string
@@ -94,16 +94,22 @@ _wt_find_env_base() {
     print -- ""
 }
 
-# Copy .env into a destination worktree (no-clobber)
+# Copy .env into a destination worktree (no-clobber). Only copies when the .env
+# is gitignored in the source repo, so a `git add` inside the worktree can't
+# stage secrets that were never meant to be tracked.
 _wt_copy_env() {
     local dest="$1"
     [[ -z "$ENV_BASE" ]] && return 0
-    if [[ "$ENV_BASE" == "." ]]; then
-        [[ -f "$REPO_ROOT/.env" ]] && cp -n "$REPO_ROOT/.env" "$dest/.env" 2>/dev/null || true
-    else
-        mkdir -p "$dest/$ENV_BASE" 2>/dev/null || true
-        [[ -f "$REPO_ROOT/$ENV_BASE/.env" ]] && cp -n "$REPO_ROOT/$ENV_BASE/.env" "$dest/$ENV_BASE/.env" 2>/dev/null || true
+    local rel
+    if [[ "$ENV_BASE" == "." ]]; then rel=".env"; else rel="$ENV_BASE/.env"; fi
+    local src="$REPO_ROOT/$rel"
+    [[ -f "$src" ]] || return 0
+    if ! git -C "$REPO_ROOT" check-ignore -q "$rel" 2>/dev/null; then
+        print -u2 -- "worktree: $rel is not gitignored in the source repo; skipping .env copy to avoid staging secrets."
+        return 0
     fi
+    [[ "$ENV_BASE" == "." ]] || mkdir -p "$dest/$ENV_BASE" 2>/dev/null || true
+    cp -n "$src" "$dest/$rel" 2>/dev/null || true
 }
 
 # Reuse node_modules via hardlinks when the lockfile matches
@@ -120,8 +126,8 @@ _wt_node_modules() {
     [[ -f "package-lock.json" ]] || cp "$REPO_ROOT/package-lock.json" "./package-lock.json" 2>/dev/null || true
 
     local base_hash here_hash
-    base_hash="$(eval "$hasher" < "$REPO_ROOT/package-lock.json" | awk '{print $1}')"
-    here_hash="$(eval "$hasher" < "package-lock.json" | awk '{print $1}')"
+    base_hash="$(${=hasher} < "$REPO_ROOT/package-lock.json" | awk '{print $1}')"
+    here_hash="$(${=hasher} < "package-lock.json" | awk '{print $1}')"
     [[ "$base_hash" != "$here_hash" ]] && return 0
 
     [[ -e "node_modules" ]] && rm -rf "node_modules"
@@ -341,9 +347,15 @@ _wt_maybe_rebase() {
     branch_author="$(git log -1 --format='%an' "$current_branch" 2>/dev/null || echo "")"
     gh_user="$(gh api user --jq '.login' 2>/dev/null || echo "")"
 
+    # Protected/shared branches never auto-rebase, even if you authored the last
+    # commit on them. Closes the "any slash-free branch is mine" hole that would
+    # rebase develop/release/hotfix onto base.
+    case "$current_branch" in
+        main|master|trunk|develop|dev|staging|release|release/*|hotfix|hotfix/*) return 0 ;;
+    esac
+
     if [[ -n "$git_user" && "$branch_author" == "$git_user" ]]; then is_own=1
-    elif [[ -n "$gh_user" && "$BRANCH" == *"$gh_user"* ]]; then is_own=1
-    elif [[ -n "$gh_user" && "$BRANCH" != *"/"* ]]; then is_own=1; fi
+    elif [[ -n "$gh_user" && "$BRANCH" == *"$gh_user"* ]]; then is_own=1; fi
 
     (( is_own )) || return 0
     [[ "$current_branch" == "$BASE_REF" || "$current_branch" == "HEAD" ]] && return 0
@@ -394,7 +406,12 @@ _cc_worktree() {
             *)            if [[ -z "$BRANCH" ]]; then BRANCH="$a"; elif [[ -z "$ENV_BASE_ARG" ]]; then ENV_BASE_ARG="$a"; fi ;;
         esac
     done
-    [[ -n "${WORKTREE_AI_RESOLVE:-}" ]] && AI_RESOLVE=1
+    # WORKTREE_AI_RESOLVE overrides the flag either way: set to 0 to force-disable
+    # even on the `cc worktree` path (which always passes --ai-resolve); any other
+    # non-empty value enables it without the flag.
+    if [[ -n "${WORKTREE_AI_RESOLVE:-}" ]]; then
+        if [[ "$WORKTREE_AI_RESOLVE" == "0" ]]; then AI_RESOLVE=0; else AI_RESOLVE=1; fi
+    fi
 
     print -u2 -- "worktree: setting up '$BRANCH'..."
     { _wt_main; rc=$? } always { _wt_restore_stash; (( rc )) && cd "$_wt_origin" 2>/dev/null }

@@ -1,6 +1,6 @@
 ---
 name: session-handoff
-description: Produce a tight decision-first handoff so a future Claude or human can pick up the work cold without reading the prior conversation
+description: Use at the end of a working session, before /clear or context compaction, or when the user asks to wrap up or summarize for next time.
 ---
 
 # Session Handoff
@@ -53,7 +53,7 @@ This is the section where "we did not verify X" or "Y depends on Z which is not 
 - Decisions and facts only. No tool narration ("I read", "I dispatched", "I searched"). No exploration recap. The reader does not care how you investigated, only what is true now.
 - Concrete identifiers. Name commits with short SHAs, files with `path:line` references, versions as exact strings, dates as absolute ISO. "We bumped TypeScript" is wrong; "TS 5.5.0 -> 5.9.3 because 5.5.0 was never released stable" is right.
 - Tight. Each section under ~10 lines unless the session genuinely covered multiple subsystems. The whole document should fit on one screen for a single-thread session.
-- No emojis. No em dashes or en dashes: use ASCII hyphens.
+- No emojis. No em dashes or en dashes: use commas, colons, or periods.
 - No preamble ("Here is the handoff..."). No closing summary or trailing "Let me know if you need anything else". The document ends where it ends.
 - A handoff that requires the source conversation to be understood is a failure of the skill. If you cannot make a point stand alone, drop it.
 

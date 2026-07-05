@@ -24,10 +24,25 @@ count_file="$dir/search-count"
 seen_file="$dir/seen-reads"
 tool_count_file="$dir/tool-count"
 
+# Atomic counter increment using mkdir spinlock (macOS-safe, no flock needed).
+# Sets global _INCR_RESULT to the new counter value (avoids a racy re-read).
+_incr_counter() {
+  local file="$1"
+  local lock="${file}.lock"
+  local i=0
+  until mkdir "$lock" 2>/dev/null || [ "$i" -ge 50 ]; do
+    sleep 0.01; i=$((i+1))
+  done
+  local n
+  n="$(cat "$file" 2>/dev/null || echo 0)"
+  n=$((n + 1))
+  printf '%s' "$n" > "${file}.tmp.$$" && mv "${file}.tmp.$$" "$file"
+  rmdir "$lock" 2>/dev/null
+  _INCR_RESULT="$n"
+}
+
 # Bump global tool counter (statusline reads this).
-tn="$(cat "$tool_count_file" 2>/dev/null || echo 0)"
-tn=$((tn + 1))
-printf '%s' "$tn" > "${tool_count_file}.tmp.$$" && mv "${tool_count_file}.tmp.$$" "$tool_count_file"
+_incr_counter "$tool_count_file"
 
 bump_search=false
 case "$tool" in
@@ -47,9 +62,8 @@ esac
 
 [[ "$bump_search" != true ]] && exit 0
 
-n="$(cat "$count_file" 2>/dev/null || echo 0)"
-n=$((n + 1))
-printf '%s' "$n" > "${count_file}.tmp.$$" && mv "${count_file}.tmp.$$" "$count_file"
+_incr_counter "$count_file"
+n="$_INCR_RESULT"
 
 # Threshold nudges. Single, escalating message at each step.
 case "$n" in

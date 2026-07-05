@@ -14,9 +14,29 @@ CMD=$(jq -r '.tool_input.command // ""' -)
 WORKSPACE="$HOME/Workspace"
 CLAUDE_DIR="$HOME/.claude"
 
+# Lexically resolve . and .. without touching the filesystem (the rm target may
+# not exist yet). Conservative: a path like ~/Workspace/../secrets collapses to
+# a path outside the allowlist and is blocked, closing the `..` traversal bypass.
+canon() {
+  local p="$1" seg res=""
+  local -a out _segs
+  [[ "$p" != /* ]] && p="$(pwd)/$p"
+  local IFS=/
+  read -ra _segs <<< "$p"
+  for seg in "${_segs[@]}"; do
+    case "$seg" in
+      ''|.) ;;
+      ..)   [[ ${#out[@]} -gt 0 ]] && unset "out[$(( ${#out[@]} - 1 ))]" ;;
+      *)    out+=("$seg") ;;
+    esac
+  done
+  for seg in "${out[@]}"; do res+="/$seg"; done
+  printf '%s' "${res:-/}"
+}
+
 is_allowed() {
   local path="${1/#\~/$HOME}"
-  [[ "$path" != /* ]] && path="$(pwd)/$path"
+  path="$(canon "$path")"
   [[ "$path" == "$WORKSPACE" || "$path" == "$WORKSPACE/"* ]] && return 0
   [[ "$path" == "$CLAUDE_DIR" || "$path" == "$CLAUDE_DIR/"* ]] && return 0
   return 1

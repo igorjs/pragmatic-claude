@@ -1,6 +1,8 @@
 ---
-description: AI-generated commit message, then push to remote
+description: Use when committing staged changes with a generated message and pushing. Handles staging, formatting, a signed commit, optional rebase, and push.
 allowed-tools: Bash, Read
+argument-hint: "[--yes|-y] [--all|-A] [--update|-u] [--amend|-a]"
+model: sonnet
 effort: medium
 ---
 

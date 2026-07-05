@@ -165,15 +165,19 @@ strip_ansi() {
     printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g'
 }
 
-# Count visible characters (unicode-safe via awk)
-visible_len() {
-    printf '%s' "$(strip_ansi "$1")" | awk '{print length}'
-}
+# Count visible display columns (codepoint count: total bytes minus UTF-8 continuation
+# bytes 0x80-0xBF). Locale-independent; handles multibyte glyphs like █ ░ ✗ ● ϓ.
+visible_len() { strip_ansi "$1" | LC_ALL=C awk '{ t=length($0); c=gsub(/[\200-\277]/,"",$0); print t-c }'; }
 
 # File mtime in epoch seconds. macOS uses stat -f %m, GNU stat uses -c %Y.
 file_mtime() {
     stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
 }
+
+# Parse an ISO 8601 UTC timestamp (e.g. "2024-01-15T10:30:00Z") to epoch seconds.
+# macOS/BSD: date -j -f; Linux/GNU: date -d. TZ=UTC ensures correct epoch on both.
+# Returns empty string on parse failure (both branches fail).
+iso_to_epoch() { TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$1" +%s 2>/dev/null || TZ=UTC date -d "$1" +%s 2>/dev/null; }
 
 # Filesystem-safe slug from arbitrary string (for cache file names).
 cache_slug() {
@@ -238,6 +242,27 @@ if [[ ! -d "$CACHE_DIR" ]]; then
     mkdir -p "$CACHE_DIR" 2>/dev/null && chmod 700 "$CACHE_DIR" 2>/dev/null
 fi
 
+# jq program shared by the PR-path CI rollup and the standalone CI rollup.
+# Input: any object with a .statusCheckRollup array (may be absent).
+# Output: one line "state failed running total"  (state: none | fail | running | pass).
+JQ_CI_ROLLUP='
+    def is_failed:
+        (((.conclusion // "") | ascii_downcase) | (. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required" or . == "startup_failure" or . == "stale"))
+        or (((.state // "") | ascii_downcase) | (. == "failure" or . == "error"));
+    def is_running:
+        (((.status // "") | ascii_downcase) | (. == "in_progress" or . == "queued" or . == "pending" or . == "waiting"))
+        or (((.state // "") | ascii_downcase) | (. == "pending"));
+    (.statusCheckRollup // []) as $checks
+    | ($checks | length) as $total
+    | ($checks | map(select(is_failed)) | length) as $failed
+    | ($checks | map(select(is_running)) | length) as $running
+    | (if $total == 0 then "none"
+       elif $failed > 0 then "fail"
+       elif $running > 0 then "running"
+       else "pass" end) as $state
+    | "\($state) \($failed) \($running) \($total)"
+'
+
 # ┌──────────────────────────────────────────────────────────────────────────────┐
 # │  Parse JSON Input                                                            │
 # │                                                                              │
@@ -261,12 +286,6 @@ if command -v jq >/dev/null 2>&1 && [[ -n "$input" ]]; then
         @sh "rl_7d=\(.rate_limits.seven_day.used_percentage // "")",
         @sh "json_effort=\(.effort.level // "")",
         @sh "json_thinking=\(if .thinking.enabled then "true" else "" end)",
-        @sh "json_pr_number=\(.pr.number // "" | tostring | if . == "null" then "" else . end)",
-        @sh "json_pr_review=\(.pr.review_state // "")",
-        @sh "json_worktree_branch=\(.worktree.branch // "")",
-        @sh "json_git_worktree=\(.workspace.git_worktree // "")",
-        @sh "json_repo_owner=\(.workspace.repo.owner // "")",
-        @sh "json_repo_name=\(.workspace.repo.name // "")",
         @sh "cost_usd=\(.cost.total_cost_usd // "")",
         @sh "wall_ms=\(.cost.total_duration_ms // "")"
     ' 2>/dev/null) && eval "$_jq_out" 2>/dev/null || true
@@ -348,21 +367,44 @@ fi
 
 
 # ── Right side: GitHub PR status ──
-# Reads whatever is cached and renders immediately. If the cache is stale or
-# missing, spawns a fully-detached background `gh pr view` to refresh it for the
-# next render (the harness re-runs us every refreshInterval seconds). The
-# synchronous path NEVER blocks on `gh`: that's what trips Claude Code's
-# statusline timeout and disables it for the rest of the process lifetime.
+# render_pr_right reads from cache and renders immediately; if the cache is stale
+# or missing it fires a fully-detached background gh call to refresh for the next
+# render. The synchronous path NEVER blocks on gh.
 
-right=""
+# Fire an async cache-refresh for the PR JSON, guarded by a lock file so only one
+# refresh is in flight at a time. Treats locks older than 30s as stale.
+_pr_fire_refresh() {
+    local pr_cache_file="$1" pr_lock pr_lock_age
+    pr_lock="${pr_cache_file}.lock"
+    pr_lock_age=0
+    [[ -f "$pr_lock" ]] && pr_lock_age=$(( $(date +%s) - $(file_mtime "$pr_lock") ))
+    if [[ "$pr_lock_age" -gt 30 ]]; then
+        rm -f "$pr_lock" 2>/dev/null || true
+    fi
+    if ( set -o noclobber; : > "$pr_lock" ) 2>/dev/null; then
+        nohup bash -c '
+            trap "rm -f \"$1\"" EXIT
+            NO_COLOR=1 GIT_TERMINAL_PROMPT=0 gh pr view \
+                --json number,author,reviewDecision,state,mergedAt,closedAt,body,latestReviews,reviewRequests,statusCheckRollup \
+                2>/dev/null > "$2.tmp.$$" && mv "$2.tmp.$$" "$2"
+        ' _ "$pr_lock" "$pr_cache_file" </dev/null >/dev/null 2>&1 &
+        disown 2>/dev/null || true
+    fi
+}
 
-if [[ "$SHOW_PR" == true && "$git_in_repo" == true \
-    && -n "$branch" && "$branch" != "detached" \
-    && -n "$gh_path" ]] \
-    && command -v gh >/dev/null 2>&1; then
+# Render the PR section of line 1's right side.
+# Sets global `right`, and for workspace projects sets ci_state/ci_failed/
+# ci_running/ci_total so the standalone CI block below can skip its own fetch.
+render_pr_right() {
+    [[ "$SHOW_PR" == true ]] || return 0
+    [[ "$git_in_repo" == true ]] || return 0
+    [[ -n "$branch" && "$branch" != "detached" ]] || return 0
+    [[ -n "$gh_path" ]] || return 0
+    command -v gh >/dev/null 2>&1 || return 0
 
-    # Shared cache (repo + branch). The file may not exist yet, may be empty (a
-    # known "no PR" marker), or may be stale; we use it as-is and refresh in bg.
+    # Shared cache (repo + branch). May not exist, be empty (known "no PR" marker),
+    # or be stale; we use it as-is and refresh in the background.
+    local pr_cache_file pr_cache_age pr_json
     pr_cache_file="${CACHE_DIR}/pr-$(cache_slug "${cwd}::${branch}").json"
     pr_cache_age=999999
     [[ -f "$pr_cache_file" ]] && pr_cache_age=$(( $(date +%s) - $(file_mtime "$pr_cache_file") ))
@@ -370,197 +412,179 @@ if [[ "$SHOW_PR" == true && "$git_in_repo" == true \
     pr_json=""
     [[ -f "$pr_cache_file" ]] && pr_json=$(cat "$pr_cache_file" 2>/dev/null || true)
 
-    # If cache is stale or missing, refresh asynchronously. setsid + nohup +
-    # closing all inherited fds detaches the child completely so this script
-    # exits in <100ms regardless of gh's response time.
-    if [[ "$pr_cache_age" -ge "$PR_CACHE_TTL" ]]; then
-        # Skip refresh if another refresh is already in flight (lock file).
-        # Treat lock files older than 30s as stale (trap cleanup may not fire on SIGKILL).
-        pr_lock="${pr_cache_file}.lock"
-        pr_lock_age=0
-        [[ -f "$pr_lock" ]] && pr_lock_age=$(( $(date +%s) - $(file_mtime "$pr_lock") ))
-        if [[ "$pr_lock_age" -gt 30 ]]; then
-            rm -f "$pr_lock" 2>/dev/null || true
-        fi
-        if ( set -o noclobber; : > "$pr_lock" ) 2>/dev/null; then
-            nohup bash -c '
-                trap "rm -f \"$1\"" EXIT
-                NO_COLOR=1 GIT_TERMINAL_PROMPT=0 gh pr view \
-                    --json number,author,reviewDecision,state,mergedAt,closedAt,body,latestReviews,reviewRequests,statusCheckRollup \
-                    2>/dev/null > "$2.tmp.$$" && mv "$2.tmp.$$" "$2"
-            ' _ "$pr_lock" "$pr_cache_file" </dev/null >/dev/null 2>&1 &
-            disown 2>/dev/null || true
-        fi
-    fi
+    [[ "$pr_cache_age" -ge "$PR_CACHE_TTL" ]] && _pr_fire_refresh "$pr_cache_file"
 
-    if [[ -n "$pr_json" ]]; then
-        pr_number=$(printf '%s' "$pr_json" | jq -r '.number // empty' 2>/dev/null)
-        pr_author=$(printf '%s' "$pr_json" | jq -r '.author.login // empty' 2>/dev/null)
-        pr_review=$(printf '%s' "$pr_json" | jq -r '.reviewDecision // empty' 2>/dev/null)
-        pr_state=$(printf '%s' "$pr_json" | jq -r '.state // empty' 2>/dev/null)
-    fi
+    [[ -n "$pr_json" ]] || return 0
 
-    # repo_owner / repo_name already parsed once near the git_in_repo block above.
+    # Single jq pass: extract all PR fields + CI rollup in one fork.
+    # (CI rollup uses the same is_failed/is_running logic as $JQ_CI_ROLLUP.)
+    # ci_* are NOT declared local — the standalone CI block reads them after return.
+    local _pr_out pr_number pr_author pr_review pr_state pr_merged_at pr_closed_at
+    local jira_from_body ci_summary pr_pending pr_completed
+    _pr_out=$(printf '%s' "$pr_json" | jq -r '
+        def is_failed:
+            (((.conclusion // "") | ascii_downcase) | (. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required" or . == "startup_failure" or . == "stale"))
+            or (((.state // "") | ascii_downcase) | (. == "failure" or . == "error"));
+        def is_running:
+            (((.status // "") | ascii_downcase) | (. == "in_progress" or . == "queued" or . == "pending" or . == "waiting"))
+            or (((.state // "") | ascii_downcase) | (. == "pending"));
+        (.reviewRequests // []) as $req
+        | [$req[]? | (.login // .name // "team")] as $pending_logins
+        | (.statusCheckRollup // []) as $checks
+        | ($checks | length) as $ci_total
+        | ($checks | map(select(is_failed)) | length) as $ci_failed
+        | ($checks | map(select(is_running)) | length) as $ci_running
+        | (if $ci_total == 0 then "none"
+           elif $ci_failed > 0 then "fail"
+           elif $ci_running > 0 then "running"
+           else "pass" end) as $ci_st
+        | @sh "pr_number=\(.number // "" | tostring | if . == "null" then "" else . end)",
+          @sh "pr_author=\(.author.login // "")",
+          @sh "pr_review=\(.reviewDecision // "")",
+          @sh "pr_state=\(.state // "")",
+          @sh "pr_merged_at=\(.mergedAt // "")",
+          @sh "pr_closed_at=\(.closedAt // "")",
+          @sh "jira_from_body=\(.body // "" | [scan("[A-Z][A-Z0-9]+-[0-9]+")] | if length > 0 then .[0] else "" end)",
+          @sh "ci_summary=\("\($ci_st) \($ci_failed) \($ci_running) \($ci_total)")",
+          @sh "pr_pending=\([$pending_logins[]] | join("\n"))",
+          @sh "pr_completed=\([.latestReviews[]? |
+              select(.author.login != "coderabbitai" and .state != "COMMENTED"
+                  and ([.author.login] | inside($pending_logins) | not)) |
+              (if .state == "APPROVED" then "g"
+               elif .state == "CHANGES_REQUESTED" then "r"
+               else "d" end) + ":" + .author.login + ":" + (.submittedAt // "")] | join("\n"))"
+    ' 2>/dev/null) && eval "$_pr_out" 2>/dev/null || true
 
-    # ── CI rollup (workspace projects only) ──
-    # Collapses statusCheckRollup (a heterogeneous array of CheckRun + StatusContext
-    # entries) into a single state plus counts. The // [] fallback handles cached PR
-    # JSON written before this field was tracked; those simply render as "none".
+    # Populate CI globals (workspace projects only). The standalone CI block below
+    # skips its own fetch when ci_state is already set.
     ci_state=""; ci_failed=0; ci_running=0; ci_total=0
-    if [[ "$SHOW_CI" == true ]] && is_workspace_project "$cwd" && [[ -n "$pr_json" ]]; then
-        ci_summary=$(printf '%s' "$pr_json" | jq -r '
-            def is_failed:
-                (((.conclusion // "") | ascii_downcase) | (. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required" or . == "startup_failure" or . == "stale"))
-                or (((.state // "") | ascii_downcase) | (. == "failure" or . == "error"));
-            def is_running:
-                (((.status // "") | ascii_downcase) | (. == "in_progress" or . == "queued" or . == "pending" or . == "waiting"))
-                or (((.state // "") | ascii_downcase) | (. == "pending"));
-            (.statusCheckRollup // []) as $checks
-            | ($checks | length) as $total
-            | ($checks | map(select(is_failed)) | length) as $failed
-            | ($checks | map(select(is_running)) | length) as $running
-            | (if $total == 0 then "none"
-               elif $failed > 0 then "fail"
-               elif $running > 0 then "running"
-               else "pass" end) as $state
-            | "\($state) \($failed) \($running) \($total)"
-        ' 2>/dev/null)
+    if [[ "$SHOW_CI" == true ]] && is_workspace_project "$cwd"; then
         read -r ci_state ci_failed ci_running ci_total <<< "$ci_summary"
     fi
 
-    # Extract Jira ticket: try branch name first, then PR body
-    jira_ticket=""
+    [[ -n "$pr_number" ]] || return 0
+
+    # Jira ticket: branch name takes priority over first match in PR body.
+    local jira_ticket=""
     if [[ "$branch" =~ ([A-Z][A-Z0-9]+-[0-9]+) ]]; then
         jira_ticket="${BASH_REMATCH[1]}"
-    elif [[ -n "$pr_json" ]]; then
-        jira_ticket=$(printf '%s' "$pr_json" | jq -r '.body // ""' 2>/dev/null \
-            | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1)
+    elif [[ -n "$jira_from_body" ]]; then
+        jira_ticket="$jira_from_body"
     fi
 
-    # Split into completed reviews and pending requests
-    completed_reviewers=""
-    pending_reviewers=""
-    if [[ -n "$pr_json" ]]; then
-        # Pending reviewers (re-requested reviews take priority over past reviews)
-        pending_reviewers=$(printf '%s' "$pr_json" | jq -r '
-            [.reviewRequests[]? | (.login // .name // "team")]
-            | .[]' 2>/dev/null)
-        # Completed: users who submitted a review (skip bots, comments, and anyone re-requested)
-        # Format: color:login:submittedAt
-        completed_reviewers=$(printf '%s' "$pr_json" | jq -r --argjson pending \
-            "$(printf '%s' "$pr_json" | jq '[.reviewRequests[]? | (.login // .name // "team")]' 2>/dev/null)" '
-            [.latestReviews[]? |
-                select(.author.login != "coderabbitai" and .state != "COMMENTED"
-                    and ([.author.login] | inside($pending) | not)) |
-                (if .state == "APPROVED" then "g"
-                elif .state == "CHANGES_REQUESTED" then "r"
-                else "d" end) + ":" + .author.login + ":" + (.submittedAt // "")]
-            | .[]' 2>/dev/null)
+    local pr_label
+    pr_label="${ORANGE}PR #${pr_number}${RESET}"
+    if [[ -n "$repo_owner" && -n "$repo_name" ]]; then
+        pr_label=$(osc8_link "https://github.com/${repo_owner}/${repo_name}/pull/${pr_number}" "$pr_label")
+    fi
+    right="$pr_label"
+
+    # CI badge sits right after the PR number. Pass is silent; only fail/running surfaces.
+    case "$ci_state" in
+        fail)    right="${right} ${RED}CI ✗ ${ci_failed}/${ci_total}${RESET}" ;;
+        running) right="${right} ${YELLOW}CI ● ${ci_running}/${ci_total}${RESET}" ;;
+    esac
+
+    if [[ -n "$jira_ticket" ]]; then
+        local jira_label
+        jira_label="${TEAL}${jira_ticket}${RESET}"
+        jira_label=$(osc8_link "https://clipboard.atlassian.net/browse/${jira_ticket}" "$jira_label")
+        right="${right} ${jira_label}"
     fi
 
-    if [[ -n "$pr_number" ]]; then
-        pr_label="${ORANGE}PR #${pr_number}${RESET}"
-        if [[ -n "$repo_owner" && -n "$repo_name" ]]; then
-            pr_label=$(osc8_link "https://github.com/${repo_owner}/${repo_name}/pull/${pr_number}" "$pr_label")
-        fi
-        right="$pr_label"
-        # CI badge sits right after the PR number so build state is visible without
-        # scanning past the Jira ticket, author, review state, and reviewer list.
-        # Pass is silent; only failing/running CI surfaces.
-        case "$ci_state" in
-            fail)    right="${right} ${RED}CI ✗ ${ci_failed}/${ci_total}${RESET}" ;;
-            running) right="${right} ${YELLOW}CI ● ${ci_running}/${ci_total}${RESET}" ;;
-        esac
-        if [[ -n "$jira_ticket" ]]; then
-            jira_label="${TEAL}${jira_ticket}${RESET}"
-            jira_label=$(osc8_link "https://clipboard.atlassian.net/browse/${jira_ticket}" "$jira_label")
-            right="${right} ${jira_label}"
-        fi
-        [[ -n "$pr_author" ]] && right="${right} ${WHITE}@${pr_author}${RESET}"
-        show_reviewers=true
-        # PR lifecycle state takes priority over review decision.
-        # A merged PR's reviewDecision is still "APPROVED" but the user
-        # needs to see MERGED, not the stale review status.
-        case "$pr_state" in
-            MERGED)
-                right="${right} ${MAUVE}MERGED${RESET}"
-                state_ts=$(printf '%s' "$pr_json" | jq -r '.mergedAt // empty' 2>/dev/null)
-                if [[ -n "$state_ts" ]]; then
-                    state_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$state_ts" +%s 2>/dev/null || echo "")
-                    if [[ -n "$state_epoch" ]]; then
-                        diff_s=$(($(date +%s) - state_epoch))
-                        if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
-                        elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
-                        else state_ago="$((diff_s / 86400))d ago"; fi
-                        right="${right} ${DIM}(${state_ago})${RESET}"
+    [[ -n "$pr_author" ]] && right="${right} ${WHITE}@${pr_author}${RESET}"
+
+    # PR lifecycle state takes priority over review decision.
+    # A merged PR's reviewDecision is still "APPROVED" but the user
+    # needs to see MERGED, not the stale review status.
+    local show_reviewers=true
+    local state_epoch diff_s state_ago
+    case "$pr_state" in
+        MERGED)
+            right="${right} ${MAUVE}MERGED${RESET}"
+            if [[ -n "$pr_merged_at" ]]; then
+                state_epoch=$(iso_to_epoch "$pr_merged_at")
+                if [[ -n "$state_epoch" ]]; then
+                    diff_s=$(( $(date +%s) - state_epoch ))
+                    if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
+                    elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
+                    else state_ago="$((diff_s / 86400))d ago"; fi
+                    right="${right} ${DIM}(${state_ago})${RESET}"
+                fi
+            fi
+            show_reviewers=false ;;
+        CLOSED)
+            right="${right} ${RED}CLOSED${RESET}"
+            if [[ -n "$pr_closed_at" ]]; then
+                state_epoch=$(iso_to_epoch "$pr_closed_at")
+                if [[ -n "$state_epoch" ]]; then
+                    diff_s=$(( $(date +%s) - state_epoch ))
+                    if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
+                    elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
+                    else state_ago="$((diff_s / 86400))d ago"; fi
+                    right="${right} ${DIM}(${state_ago})${RESET}"
+                fi
+            fi
+            show_reviewers=false ;;
+        *)
+            case "$pr_review" in
+                APPROVED)           right="${right} ${GREEN}APPROVED${RESET}" ;;
+                CHANGES_REQUESTED)  right="${right} ${RED}CHANGES REQUESTED${RESET}" ;;
+                REVIEW_REQUIRED)    right="${right} ${YELLOW}REVIEW REQUIRED${RESET}" ;;
+                *)                  right="${right} ${DIM}NO REVIEW${RESET}"; show_reviewers=false ;;
+            esac
+            ;;
+    esac
+
+    # Append completed reviewers: "by name (2h ago) name (1d ago)"
+    if [[ -n "$pr_completed" && "$show_reviewers" == true ]]; then
+        right="${right} ${DIM}by${RESET}"
+        local now_epoch; now_epoch=$(date +%s)
+        local entry local_color local_rest local_name local_ts local_ago review_epoch
+        while IFS= read -r entry; do
+            [[ -z "$entry" ]] && continue
+            local_color="${entry%%:*}"
+            local_rest="${entry#*:}"
+            local_name="${local_rest%%:*}"
+            local_ts="${local_rest#*:}"
+            local_ago=""
+            if [[ -n "$local_ts" ]]; then
+                review_epoch=$(iso_to_epoch "$local_ts")
+                if [[ -n "$review_epoch" ]]; then
+                    diff_s=$(( now_epoch - review_epoch ))
+                    if [[ $diff_s -lt 3600 ]]; then
+                        local_ago="$((diff_s / 60))m"
+                    elif [[ $diff_s -lt 86400 ]]; then
+                        local_ago="$((diff_s / 3600))h"
+                    else
+                        local_ago="$((diff_s / 86400))d"
                     fi
                 fi
-                show_reviewers=false ;;
-            CLOSED)
-                right="${right} ${RED}CLOSED${RESET}"
-                state_ts=$(printf '%s' "$pr_json" | jq -r '.closedAt // empty' 2>/dev/null)
-                if [[ -n "$state_ts" ]]; then
-                    state_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$state_ts" +%s 2>/dev/null || echo "")
-                    if [[ -n "$state_epoch" ]]; then
-                        diff_s=$(($(date +%s) - state_epoch))
-                        if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
-                        elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
-                        else state_ago="$((diff_s / 86400))d ago"; fi
-                        right="${right} ${DIM}(${state_ago})${RESET}"
-                    fi
-                fi
-                show_reviewers=false ;;
-            *)
-                case "$pr_review" in
-                    APPROVED)           right="${right} ${GREEN}APPROVED${RESET}" ;;
-                    CHANGES_REQUESTED)  right="${right} ${RED}CHANGES REQUESTED${RESET}" ;;
-                    REVIEW_REQUIRED)    right="${right} ${YELLOW}REVIEW REQUIRED${RESET}" ;;
-                    *)                  right="${right} ${DIM}NO REVIEW${RESET}"; show_reviewers=false ;;
-                esac
-                ;;
-        esac
-        # Append completed reviewers: "by name(2h) name(1d)"
-        if [[ -n "$completed_reviewers" && "$show_reviewers" == true ]]; then
-            right="${right} ${DIM}by${RESET}"
-            now_epoch=$(date +%s)
-            while IFS= read -r entry; do
-                local_color="${entry%%:*}"
-                local_rest="${entry#*:}"
-                local_name="${local_rest%%:*}"
-                local_ts="${local_rest#*:}"
-                local_ago=""
-                if [[ -n "$local_ts" ]]; then
-                    review_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$local_ts" +%s 2>/dev/null || echo "")
-                    if [[ -n "$review_epoch" ]]; then
-                        diff_s=$((now_epoch - review_epoch))
-                        if [[ $diff_s -lt 3600 ]]; then
-                            local_ago="$((diff_s / 60))m"
-                        elif [[ $diff_s -lt 86400 ]]; then
-                            local_ago="$((diff_s / 3600))h"
-                        else
-                            local_ago="$((diff_s / 86400))d"
-                        fi
-                    fi
-                fi
-                case "$local_color" in
-                    g) right="${right} ${GREEN}${local_name}${RESET}" ;;
-                    r) right="${right} ${RED}${local_name}${RESET}" ;;
-                    *) right="${right} ${DIM}${local_name}${RESET}" ;;
-                esac
-                [[ -n "$local_ago" ]] && right="${right} ${DIM}(${local_ago} ago)${RESET}"
-            done <<< "$completed_reviewers"
-        fi
-        # Append pending reviewers: "waiting on name, name"
-        if [[ -n "$pending_reviewers" ]]; then
-            pending_list=""
-            while IFS= read -r name; do
-                [[ -n "$pending_list" ]] && pending_list="${pending_list}, "
-                pending_list="${pending_list}${name}"
-            done <<< "$pending_reviewers"
-            right="${right} ${DIM}waiting on${RESET} ${YELLOW}${pending_list}${RESET}"
-        fi
+            fi
+            case "$local_color" in
+                g) right="${right} ${GREEN}${local_name}${RESET}" ;;
+                r) right="${right} ${RED}${local_name}${RESET}" ;;
+                *) right="${right} ${DIM}${local_name}${RESET}" ;;
+            esac
+            [[ -n "$local_ago" ]] && right="${right} ${DIM}(${local_ago} ago)${RESET}"
+        done <<< "$pr_completed"
     fi
-fi
+
+    # Append pending reviewers: "waiting on name, name"
+    if [[ -n "$pr_pending" ]]; then
+        local pending_list="" name
+        while IFS= read -r name; do
+            [[ -z "$name" ]] && continue
+            [[ -n "$pending_list" ]] && pending_list="${pending_list}, "
+            pending_list="${pending_list}${name}"
+        done <<< "$pr_pending"
+        [[ -n "$pending_list" ]] && right="${right} ${DIM}waiting on${RESET} ${YELLOW}${pending_list}${RESET}"
+    fi
+}
+
+right=""
+ci_state=""; ci_failed=0; ci_running=0; ci_total=0
+render_pr_right
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  Standalone CI fetch (workspace projects without an open PR)                 ║
@@ -607,27 +631,10 @@ if [[ "$SHOW_CI" == true ]] && is_workspace_project "$cwd" \
     fi
 
     if [[ -n "$ci_json" ]]; then
-        # Reshape into {statusCheckRollup: [...]} so the same jq works on both
-        # PR-derived rollups and the GraphQL response.
+        # Reshape into {statusCheckRollup: [...]} then apply the shared CI rollup program.
         ci_summary=$(printf '%s' "$ci_json" \
             | jq '{statusCheckRollup: (.data.repository.ref.target.statusCheckRollup.contexts.nodes // [])}' 2>/dev/null \
-            | jq -r '
-                def is_failed:
-                    (((.conclusion // "") | ascii_downcase) | (. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required" or . == "startup_failure" or . == "stale"))
-                    or (((.state // "") | ascii_downcase) | (. == "failure" or . == "error"));
-                def is_running:
-                    (((.status // "") | ascii_downcase) | (. == "in_progress" or . == "queued" or . == "pending" or . == "waiting"))
-                    or (((.state // "") | ascii_downcase) | (. == "pending"));
-                (.statusCheckRollup // []) as $checks
-                | ($checks | length) as $total
-                | ($checks | map(select(is_failed)) | length) as $failed
-                | ($checks | map(select(is_running)) | length) as $running
-                | (if $total == 0 then "none"
-                   elif $failed > 0 then "fail"
-                   elif $running > 0 then "running"
-                   else "pass" end) as $state
-                | "\($state) \($failed) \($running) \($total)"
-            ' 2>/dev/null)
+            | jq -r "$JQ_CI_ROLLUP" 2>/dev/null)
         read -r ci_state ci_failed ci_running ci_total <<< "$ci_summary"
     fi
 
@@ -734,7 +741,8 @@ render_cost() {
 # Always-on 5h quota: used % colored by threshold, plus time until the window resets.
 render_rate_5h() {
     [[ "$SHOW_RATE_LIMITS" == true && -n "$rl_5h" ]] || return 0
-    local out="${DIM}5h${RESET} $(rl_color "$rl_5h")$(printf '%.0f' "$rl_5h")%${RESET}"
+    local out
+    out="${DIM}5h${RESET} $(rl_color "$rl_5h")$(printf '%.0f' "$rl_5h")%${RESET}"
     if [[ -n "$rl_5h_reset" ]]; then
         local left=$(( rl_5h_reset - $(date +%s) ))
         [[ "$left" -gt 0 ]] && out="${out} ${DIM}($(fmt_age "$left") left)${RESET}"

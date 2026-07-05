@@ -9,7 +9,7 @@ My personal [Claude Code](https://docs.claude.com/en/docs/claude-code) setup: a 
 | `claude` on PATH | required | Claude Code itself |
 | zsh | required for `cc` | the launcher is zsh-only; run `claude` directly from any shell without it |
 | `git`, `jq`, `bash`, `shasum` | required | used by hooks and the install script |
-| `python3` 3.9+ | required | all hooks run in Python |
+| `python3` 3.9+ | required | used by two bash hooks (path resolution and the memory-graph rebuild); the hooks themselves are bash |
 | `rtk` (Rust Token Killer) | required | a PreToolUse hook routes every Bash command through it to cut token use |
 | `gh` | optional | statusline PR and CI status |
 | `agent-browser` | optional | browser automation MCP used by `/brainstorm` for web-only tickets and attachments |
@@ -68,7 +68,7 @@ cc worktree <branch>   # create/enter a git worktree, then start a session there
 cc new <branch>        # alias for cc worktree
 ```
 
-`cc` loads the system prompt, picks a model, and prunes old transcripts (keeps the newest 5).
+`cc` loads the system prompt, picks a model, and prunes old transcripts (keeps the newest 5; set `CCD_KEEP` to change, `CCD_KEEP=0` disables).
 
 `cc worktree` (also `ccd worktree`) creates or enters a worktree off the project's base branch. It names the folder after the JIRA key in the branch name, copies `.env`, reuses `node_modules` via hardlinks, sets upstream, and runs a daily background cleanup of merged or stale worktrees. Claude auto-resolves rebase conflicts (`--ai-resolve` is always set). Only available via `cc`/`ccd`. `cc new <branch>` is an alias for `cc worktree`.
 
@@ -89,14 +89,17 @@ Full documentation: [`docs/index.md`](docs/index.md).
 
 Slash commands live in `commands/`. See [docs/guides](docs/guides) for full usage.
 
+- `/brainstorm`: divergent discovery session; explores a raw idea, weighs approaches, and produces an approved design doc that hands off to `/scope`.
 - `/scope`: interview-driven planning; saves a verified, parallel-safe plan to `.claude/plans/` for `/implement`.
 - `/implement`: executes a `/scope` plan or `/adr` blueprint with subagents and TDD, committing each work unit. `--auto` opens a PR.
 - `/adr`: creates an Architecture Decision Record through investigate → draft → quality-gate → finalise. Saves to `.claude/adr/`.
 - `/commit-and-push`: writes a commit message from the staged diff, commits signed, optionally rebases, then pushes.
+- `/create-pull-request`: opens a PR with pre-flight checks, a conventional-commit title, and the team PR template.
 - `/quick-review`: single-pass PR review using the `grounding-review` discipline, posted as a pending GitHub review.
 - `/deep-review`: multi-agent PR review; spawns specialist subagents in parallel, consolidates findings, posts a pending review.
 - `/address-pr-comments`: walks unresolved PR comments, applies fixes or drafts replies, then pushes and posts replies.
 - `/learn-project`: analyses the repo (git history, code, PRs, JIRA/Confluence) and writes distilled facts to memory. Read-only; confirms before writing.
+- `/repo-audit`: read-only four-phase repository audit (discovery, findings, strategy, task plan).
 
 ## Skills
 
@@ -105,6 +108,7 @@ Skills live in `skills/` and load on demand. See [docs/authoring/01-commands-ski
 - `grounding-review`: review discipline; severity levels, Conventional Comments, proof ladder, verification summary.
 - `grounding-research`: investigation discipline; citation rules (every claim sourced to file:line), structured findings, scope boundaries.
 - `engineering-standards`: PR readiness, test types, mocking rules, incremental delivery, deployment flow.
+- `engineering-standards-javascript`: JS/TS companion to `engineering-standards`; covers Zod validation and Jest/Vitest mocking.
 - `writing-style`: voice rules for human-facing prose; spartan, active voice, contractions, no dashes.
 - `session-handoff`: decision-first handoff so the next session picks up cold without rereading the thread.
 

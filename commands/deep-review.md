@@ -1,6 +1,6 @@
 ---
-description: Multi-agent PR review. A swarm of specialist reviewer subagents (logic, test, security, data, types, perf, plus conditional) run in parallel, consolidated and fact-checked, then posted as a pending GitHub review. Heavier than /quick-review.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task
+description: Use for substantial, risky, or cross-cutting PRs. A swarm of specialist reviewer subagents (logic, test, security, data, types, perf, plus conditional) run in parallel, consolidated and fact-checked, then posted as a pending GitHub review. Heavier than /quick-review.
+allowed-tools: Bash, Read, Grep, Glob, Write, Task, Skill
 argument-hint: "[PR number] [--all] [--quick] [--preset <name>] [--self] [--help]"
 model: opus
 effort: max
@@ -125,6 +125,10 @@ if [[ "$LOCAL_HEAD" == "$HEAD_SHA" && -z "$DIRTY" ]]; then
   WT_CREATED=false
   echo "Mode: in-place (HEAD matches, tree clean)"
 else
+  if [[ ! -x "$HOME/.claude/shell/review-worktree.sh" ]]; then
+    echo "error: review-worktree.sh not found under \$HOME/.claude/shell/; install the repo's shell/ directory" >&2
+    exit 1
+  fi
   WT="$(bash "$HOME/.claude/shell/review-worktree.sh" setup "$PR_NUMBER" "$HEAD_SHA" 2>&1)"
   if [[ $? -ne 0 ]]; then
     echo "error: worktree setup failed: $WT" >&2
@@ -237,7 +241,7 @@ Never fabricate URLs; use the `html_url` the API returns.
 
 ## Step 7: Capture and wrap up
 
-- Persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks and anything not posted.
+- If a project memory store is present at `.claude/memory/`, persist each POSTED blocking/non-blocking finding as a project memory fact (`type: project`, tag it a review gotcha, `anchors:` to the file), deduping against existing memory first. Skip suggestions/nitpicks and anything not posted; if there's no memory store, skip silently.
 - If non-self-review and the PR has unaddressed review threads, offer to run `/address-pr-comments $PR_NUMBER`.
 - Final message: one line per outcome (pending review id + count, or submitted verb + timestamp).
 

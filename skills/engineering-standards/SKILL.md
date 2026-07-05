@@ -1,6 +1,6 @@
 ---
 name: engineering-standards
-description: Use when working on pull requests, planning testing approach, or thinking about deployment. Covers the team engineering process across PR readiness criteria, size limits, review comment conventions, testing requirements (unit/integration/E2E), mocking guidelines, incremental delivery, and deployment flow.
+description: Use when working on pull requests, planning a testing approach, or thinking about deployment under the team engineering standards.
 ---
 
 # Engineering Standards
@@ -32,7 +32,7 @@ A PR MUST meet these criteria before requesting review:
 - Review comments SHOULD use Conventional Comments format with labels and decorations.
 - Blocking comments are for issues that MUST be resolved before merge: quality gaps, undocumented tech debt, security or data integrity concerns, missing tests, or architectural issues affecting future maintenance.
 - Blocking comments SHOULD be treated as opportunities for discussion, not hard stops. Valid resolutions: fix immediately, create a follow-up ticket, document the limitation, agree the concern is out of scope, or escalate to a design discussion.
-- Non-blocking feedback SHOULD be framed as suggestions: "one thing we could do..." or "worth considering...".
+- Non-blocking feedback SHOULD be framed as suggestions: "one option here..." or "worth considering...".
 - Reviewers SHOULD prioritise re-reviews and PRs closest to completion over new PRs (pull work to the right).
 
 ### Review Turnaround

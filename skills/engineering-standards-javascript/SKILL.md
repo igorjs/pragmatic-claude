@@ -1,6 +1,6 @@
 ---
 name: engineering-standards-javascript
-description: Use when writing or reviewing JavaScript or TypeScript code and tests under the team engineering standards, especially when validating input or mocking in a Jest or Vitest test. Language-specific companion to engineering-standards; covers JS/TS validation (Zod) and test mocking (mockDeep).
+description: Use when writing or reviewing JavaScript or TypeScript code and tests under the team engineering standards, especially when validating input or setting up mocks in a Jest or Vitest test.
 ---
 
 # Engineering Standards: JavaScript and TypeScript

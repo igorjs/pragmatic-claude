@@ -52,15 +52,17 @@ session_dir() {
 abspath() {
   local p="$1"
   [[ -z "$p" ]] && return 0
-  if [[ -e "$p" ]]; then
-    # python is on every macOS install and handles both files + dirs cleanly.
-    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$p" 2>/dev/null \
-      || printf '%s' "$p"
+  # Pure-shell realpath via cd + `pwd -P` (resolves symlinks in the path prefix).
+  # Avoids a python3 fork per call on the Read/Edit hot path; portable across
+  # macOS and Linux. A leaf that is itself a symlink stays unresolved, which is
+  # fine for edit-tracking dedup (we key on the path the tool referenced).
+  if [[ -d "$p" ]]; then
+    ( cd "$p" 2>/dev/null && pwd -P ) || printf '%s' "$p"
   else
     local d b
     d="$(dirname "$p")"; b="$(basename "$p")"
     if [[ -d "$d" ]]; then
-      printf '%s/%s' "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$d" 2>/dev/null)" "$b"
+      printf '%s/%s' "$( cd "$d" 2>/dev/null && pwd -P )" "$b"
     else
       printf '%s' "$p"
     fi

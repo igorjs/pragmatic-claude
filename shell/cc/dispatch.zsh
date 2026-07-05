@@ -116,16 +116,17 @@ _claude() {
         fi
         local _cc_err_tmp
         _cc_err_tmp=$(mktemp)
-        command claude "${flags[@]}" -n "$name" --resume "$session_id" "${fork[@]}" "$@" 2>"$_cc_err_tmp"
-        local _cc_rc=$?
-        if grep -q "No conversation found" "$_cc_err_tmp" 2>/dev/null; then
-            rm -f "$_cc_err_tmp"
-            print -- "→ cc: session ${session_id:0:8}… not found; starting fresh"
-            command claude "${flags[@]}" -n "$name" "$@"
-        else
-            cat "$_cc_err_tmp" >&2
-            rm -f "$_cc_err_tmp"
-        fi
+        # always{} guarantees the temp file is removed even if the foreground
+        # claude is interrupted (Ctrl+C) before the cleanup line is reached.
+        {
+            command claude "${flags[@]}" -n "$name" --resume "$session_id" "${fork[@]}" "$@" 2>"$_cc_err_tmp"
+            if grep -q "No conversation found" "$_cc_err_tmp" 2>/dev/null; then
+                print -- "→ cc: session ${session_id:0:8}… not found; starting fresh"
+                command claude "${flags[@]}" -n "$name" "$@"
+            else
+                cat "$_cc_err_tmp" >&2
+            fi
+        } always { rm -f "$_cc_err_tmp" 2>/dev/null }
     else
         _cc_config_stamp
         command claude "${flags[@]}" -n "$name" "$@"
