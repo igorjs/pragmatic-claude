@@ -20,13 +20,13 @@ This command is built to run in an isolated subagent (`context: fork`) so the di
 
 ## Argument flags
 
-Parse these from `$ARGUMENTS` and set the corresponding env vars before the bash block in Step 1:
+Parse these from `$ARGUMENTS`. Each bash block below runs in its **own shell**, so a variable set in one step is NOT visible in a later one. Apply each flag by setting its variable to `true`/`false` at the top of the block that reads it (do not rely on an env var carried over from an earlier step):
 
-- `--all` or `-A` → `STAGE_ALL=true` (run `git add -A` before committing)
-- `--update` or `-u` → `STAGE_UPDATE=true` (run `git add -u` before committing, tracked files only)
-- `--amend` or `-a` → `AMEND_COMMIT=true` (amend the previous commit instead of creating a new one)
+- `--all` or `-A` → `STAGE_ALL=true` (run `git add -A`). Set at the top of **Step 1**.
+- `--update` or `-u` → `STAGE_UPDATE=true` (run `git add -u`, tracked files only). Set at the top of **Step 1**.
+- `--amend` or `-a` → `AMEND_COMMIT=true` (amend the previous commit). Set at the top of **Step 1** AND again in **Step 4** (both blocks read it).
 
-Combined flags are fine: `-Au`, `-a -u`, etc. No flags means: only commit what is already staged. There is no confirmation gate; the flow always runs to completion.
+Combined flags are fine: `-Au`, `-a -u`, etc. No flags means every variable stays `false`: commit only what is already staged. There is no confirmation gate; the flow always runs to completion.
 
 ## Execution rules
 
@@ -44,9 +44,11 @@ Combined flags are fine: `-Au`, `-a -u`, etc. No flags means: only commit what i
 Run everything in a single bash block:
 
 ```bash
-AMEND_COMMIT="${AMEND_COMMIT:-false}"
-STAGE_ALL="${STAGE_ALL:-false}"
-STAGE_UPDATE="${STAGE_UPDATE:-false}"
+# Set each flag from $ARGUMENTS: true when the flag was passed, else false.
+# -A -> STAGE_ALL, -u -> STAGE_UPDATE, -a -> AMEND_COMMIT. Default all false.
+AMEND_COMMIT=false
+STAGE_ALL=false
+STAGE_UPDATE=false
 
 # Auto-stage if requested
 if [ "$STAGE_ALL" = "true" ]; then
@@ -145,6 +147,9 @@ Run commit + rebase + push in a single bash block. Replace `<message>` with the 
 
 ```bash
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# Set AMEND_COMMIT=true here too when -a was passed (this block reads it for the
+# push decision below), matching Step 1; leave false otherwise.
+AMEND_COMMIT=false
 
 # Commit (signed + signoff). Heredoc preserves formatting.
 git commit ${AMEND_FLAG} --signoff --gpg-sign --file - <<'EOF'
