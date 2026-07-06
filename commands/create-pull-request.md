@@ -22,12 +22,12 @@ This command is built to run in an isolated subagent (`context: fork`) so the di
 
 ## Argument flags
 
-Parse these from `$ARGUMENTS` and set the env vars before Step 1:
+Parse these from `$ARGUMENTS`. Each bash block below runs in its **own shell**, so a variable set in one step is NOT visible in a later one. Apply each flag inside the step that uses it, not once "up front":
 
-- `--ready` → `READY_FLAG=true` (open the PR ready for review; the default is draft)
-- `--base <branch>` → `BASE_ARG=<branch>` (override the base branch)
-- `--ticket <ID>` → `TICKET_ARG=<ID>` (force the ticket, skips branch auto-detect; pass `none` to omit the line)
-- `--help` → print the usage block above and stop
+- `--ready` → open the PR ready for review instead of a draft. Applied in **Step 7**: create the PR without `--draft`.
+- `--base <branch>` → override the base branch. Applied in **Step 1**: set `BASE_ARG="<branch>"` at the top of that block.
+- `--ticket <ID>` → force the ticket, skipping branch auto-detect (`none` omits the line). Applied in **Step 4**: set `TICKET_ARG="<ID>"` at the top of that block.
+- `--help` → print the usage block above and stop.
 
 There is no confirmation flag or gate: the command always runs end to end, auto-detecting base and ticket, then pushing and creating.
 
@@ -198,10 +198,11 @@ echo "Body written: $PR_TMP/pr-body.md"
 
 ## Step 7: Push and create
 
+The PR opens as a **draft** unless `--ready` was in `$ARGUMENTS`. There is no `READY_FLAG` in this shell, so decide `DRAFT_ARG` here from the actual argument: `--draft` when `--ready` is absent, empty string when it is present. Write the chosen value literally into the block below.
+
 ```bash
-# Draft by default; --ready (READY_FLAG=true) opens it ready for review.
+# Draft by default. Set DRAFT_ARG="" instead when --ready was passed.
 DRAFT_ARG="--draft"
-[ "${READY_FLAG:-}" = "true" ] && DRAFT_ARG=""
 
 git push -u origin "HEAD:refs/heads/$CURRENT_BRANCH"
 
