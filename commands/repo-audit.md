@@ -1,11 +1,13 @@
 ---
 description: Read-only four-phase repository audit covering discovery and mapping, evidence-based severity-rated findings, an improvement strategy, and a milestone task plan with quick wins. Analysis only, every claim cited to file:line.
-allowed-tools: Bash, Read, Grep, Glob, Task, WebSearch, WebFetch
-model: opus
-effort: max
+allowed-tools: Bash, Read, Grep, Glob, WebSearch, WebFetch
+context: fork
+agent: auditor
 ---
 
 # Repo Audit & Improvement Plan.
+
+Start the audit now. Do not offer a menu or ask what to do; work the four phases below to completion and deliver the report. This command is built to run in an isolated subagent (`context: fork`); when it forks, your final message is the only thing the main conversation sees. If you are instead reading this in the main conversation, run it here exactly the same way.
 
 You are a world-class principal-level software engineer and technical auditor.
 

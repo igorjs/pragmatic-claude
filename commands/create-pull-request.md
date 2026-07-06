@@ -1,28 +1,35 @@
 ---
 description: Create a pull request with pre-flight checks, a conventional-commit title, and the team PR template, following engineering-standards and writing-style.
 allowed-tools: Bash, Read, Skill
-argument-hint: "[--draft] [--base <branch>] [--ticket <ID>] [--yes]"
-model: sonnet
-effort: high
+argument-hint: "[--ready] [--base <branch>] [--ticket <ID>]"
+context: fork
+agent: git
 ---
 
 # Create Pull Request
 
-Push the current branch and open a pull request. The title is a conventional-commit summary, the body follows the team template, and both obey `engineering-standards` (readiness, size) and `writing-style` (voice, banned words, no dashes).
+Push the current branch and open a pull request. The title is a conventional-commit summary, the body follows the team template, and both obey `engineering-standards` (readiness, size) and `writing-style` (voice, banned words, no dashes). The PR opens as a **draft** by default; pass `--ready` to publish it for review.
 
 This creates a **new** PR. If one already exists for the branch, this stops and points you at `/address-pr-comments` or `/quick-review`.
 
+## Run this now
+
+Execute the steps below immediately, end to end, running every bash block for real. Do **not** narrate a plan, summarize `git status`, offer a numbered menu, or ask "what would you like me to do?" / "proceed? [Y/n]". There is **no confirmation gate**.
+
+Run end to end: auto-detect the base and ticket, draft the title and body, then push and create. Readiness problems (uncommitted work, oversize diff, no tests) print as warnings and never pause. Only the hard aborts (on the base branch, nothing ahead of base, an existing PR) stop the run.
+
+This command is built to run in an isolated subagent (`context: fork`) so the diff and drafting stay out of the main context. When it forks, your final message is the only thing the main conversation sees, so end with a concise outcome summary (the PR URL, title, base, and draft state). If you are instead reading this in the main conversation, run it here exactly the same way; do not wait for a fork and do not defer to the user.
+
 ## Argument flags
 
-Parse these from `$ARGUMENTS` and set the env vars before Step 1:
+Parse these from `$ARGUMENTS`. Each bash block below runs in its **own shell**, so a variable set in one step is NOT visible in a later one. Apply each flag inside the step that uses it, not once "up front":
 
-- `--draft` → `DRAFT_FLAG=true` (open the PR as a draft)
-- `--base <branch>` → `BASE_ARG=<branch>` (override the base branch)
-- `--ticket <ID>` → `TICKET_ARG=<ID>` (force the ticket, skips branch auto-detect; pass `none` to omit the line)
-- `--yes` or `-y` → `AUTO_CREATE=true` (run end to end with no prompts: skip the final confirmation gate, downgrade every Step 2 readiness ask to a printed warning, and omit an undetected ticket instead of asking)
-- `--help` → print the usage block above and stop
+- `--ready` → open the PR ready for review instead of a draft. Applied in **Step 7**: create the PR without `--draft`.
+- `--base <branch>` → override the base branch. Applied in **Step 1**: set `BASE_ARG="<branch>"` at the top of that block.
+- `--ticket <ID>` → force the ticket, skipping branch auto-detect (`none` omits the line). Applied in **Step 4**: set `TICKET_ARG="<ID>"` at the top of that block.
+- `--help` → print the usage block above and stop.
 
-No flags means: auto-detect base and ticket, then ask for confirmation before pushing and creating.
+There is no confirmation flag or gate: the command always runs end to end, auto-detecting base and ticket, then pushing and creating.
 
 ## Execution rules
 
@@ -100,13 +107,13 @@ echo "commits_ahead=$AHEAD changed_lines=${CHANGED:-0} dirty_files=$DIRTY test_f
 
 Evaluate against `engineering-standards`, then decide:
 
-- **`AHEAD` = 0** → abort. There is nothing to open a PR for. This is a hard error, not a prompt; `AUTO_CREATE` does not override it.
-- **`DIRTY` > 0** → warn: those changes are uncommitted and won't be in the PR. With `AUTO_CREATE`, print the warning and continue; otherwise ask whether to proceed, commit first (`/commit-and-push`), or stop.
-- **`CHANGED` > 1000** → exceeds the hard size limit. With `AUTO_CREATE`, print a prominent warning that it is over the limit and continue; otherwise ask the user to justify or split before continuing.
-- **`CHANGED` > 500** → note it is above the soft limit and continue; suggest splitting when interactive.
-- **`TESTS` = 0** → note the diff adds no tests. With `AUTO_CREATE`, print the note and continue; otherwise confirm this is intentional (docs, config, pure refactor) before continuing; the readiness criteria expect tests for behaviour changes.
+- **`AHEAD` = 0** → abort. There is nothing to open a PR for. This is a hard error that always stops the run.
+- **`DIRTY` > 0** → print a warning: those changes are uncommitted and won't be in the PR. Continue.
+- **`CHANGED` > 1000** → print a prominent warning that it is over the hard size limit. Continue.
+- **`CHANGED` > 500** → note it is above the soft limit and continue.
+- **`TESTS` = 0** → note the diff adds no tests (the readiness criteria expect tests for behaviour changes). Continue.
 
-Report the readiness picture in one short block, then continue. With `AUTO_CREATE`, none of the above pause for input; they print and move on.
+Report the readiness picture in one short block, then continue. None of these pause for input; they print and move on.
 
 ## Step 3: Gather the diff and commit history
 
@@ -134,8 +141,8 @@ echo "TICKET=${TICKET:-<none>}"
 ```
 
 - If `TICKET` is a real ID (not empty, not `none`) → include `Ticket: <ID>` as the first line of the body.
-- If empty → the branch has no ticket. With `AUTO_CREATE`, omit the line without asking; otherwise ask the user once for a ticket ID, and omit the line entirely if they don't have one.
-- If `none` → omit the line, don't ask.
+- If empty → the branch has no ticket; omit the line without asking.
+- If `none` → omit the line.
 
 ## Step 5: Generate the title (conventional commits)
 
@@ -189,23 +196,24 @@ PRBODY_EOF
 echo "Body written: $PR_TMP/pr-body.md"
 ```
 
-## Step 7: Confirm
+## Step 7: Push and create
 
-When `AUTO_CREATE=true`, skip this gate and go straight to Step 8. Otherwise show the user the resolved title, the rendered body, base branch, and draft flag, ask for confirmation or edits, and apply edits to `$PR_TMP/pr-body.md` before continuing.
-
-## Step 8: Push and create
+The PR opens as a **draft** unless `--ready` was in `$ARGUMENTS`. There is no `READY_FLAG` in this shell, so decide `DRAFT_ARG` here from the actual argument: `--draft` when `--ready` is absent, empty string when it is present. Write the chosen value literally into the block below.
 
 ```bash
+# Draft by default. Set DRAFT_ARG="" instead when --ready was passed.
+DRAFT_ARG="--draft"
+
 git push -u origin "HEAD:refs/heads/$CURRENT_BRANCH"
 
 gh pr create \
   --title "$TITLE" \
   --body-file "$PR_TMP/pr-body.md" \
   --base "$BASE_BRANCH" \
-  ${DRAFT_FLAG:+--draft}
+  $DRAFT_ARG
 ```
 
-## Step 9: Report
+## Step 8: Report
 
 ```bash
 PR_URL=$(gh pr view "$CURRENT_BRANCH" --json url -q .url 2>/dev/null || true)
