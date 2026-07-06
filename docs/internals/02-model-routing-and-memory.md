@@ -1,6 +1,6 @@
 # Internals: Model Routing and Memory
 
-The session model defaults to Sonnet. Two systems shape which model handles a given task: a static policy in the system prompt, and a hook that detects design intent at prompt submission. Memory is a two-level typed graph stored in plain markdown files.
+The session model defaults to Sonnet. Two systems shape which model handles a given task: a static policy in the system prompt, and a hook that detects design intent at prompt submission. Memory is a typed graph stored in plain markdown files.
 
 ## Model Routing
 
@@ -30,16 +30,16 @@ On a match, the hook emits a prompt context message reminding Claude the session
 
 ## Memory Protocol
 
-Memory is a two-level typed graph. Both levels share the same file format.
+Memory is a typed graph. Both scopes share the same file format.
 
-### Levels
+### Scopes
 
-| Level | Path | Scope | Committed to git? |
+| Scope | Path | Coverage | Committed to git? |
 |---|---|---|---|
-| Global | `~/.claude/memory/` | Cross-project | Yes, part of this repo |
-| Per-project | `<repo>/.claude/memory/` | One repo only | No, git-ignored in each repo |
+| Global | `~/.claude/memory/` | Cross-project | No, git-ignored |
+| Project | `~/.claude/memory/<owner>/<repo>/` | One repo only | No, git-ignored |
 
-The project store is injected at session start. The global store's index is read on demand.
+The `<owner>/<repo>` project index is injected at session start. The global index is read on demand.
 
 ### File format
 
@@ -88,7 +88,7 @@ Traversal depth is 1 for all edge types except `supersedes`, which is followed f
 
 ### graph.json
 
-`/learn-project` generates `<repo>/.claude/memory/graph.json` alongside the project `MEMORY.md`. It's the navigable export of the project memory graph: nodes are facts and referenced code locations, edges are `links:` between facts plus `anchors:` from facts to code. The global store doesn't get a graph. See [Decisions and Memory](../guides/03-decisions-and-memory.md) for how to query and use it day-to-day.
+`~/.claude/memory/graph.json` is the single navigable export of the full memory graph: nodes are facts and referenced code locations, edges are `links:` between facts plus `anchors:` from facts to code. It covers all scopes, global and project. The `rebuild-memory-graph.sh` PostToolUse hook rebuilds it automatically after any fact file is saved. See [Decisions and Memory](../guides/03-decisions-and-memory.md) for how to query and use it day-to-day.
 
 ## See also
 

@@ -50,7 +50,7 @@ Per-session state lives in `~/.claude/runtime/<session_id>/`. The session dir ho
 
 | Script | Purpose |
 |---|---|
-| `session-init.sh` | Creates the per-session runtime dir and zeros its counters. Clears the statusline PR/CI cache for the current branch. Checks the config hash and warns on drift. Injects the per-project memory index from `<repo>/.claude/memory/MEMORY.md` as additional context when present. |
+| `session-init.sh` | Creates the per-session runtime dir and zeros its counters. Clears the statusline PR/CI cache for the current branch. Checks the config hash and warns on drift. Derives `<owner>/<repo>` from the git remote and injects `~/.claude/memory/<owner>/<repo>/MEMORY.md` as additional context when present. |
 
 ### PreToolUse
 

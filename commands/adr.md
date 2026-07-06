@@ -77,10 +77,10 @@ Build understanding before writing. Skipping this produces records that don't su
 
 1. **Read existing records** in `.claude/adr/` (if it exists) for precedent and numbering.
 2. **Explore the codebase** with Read/Glob/Grep: modules and services affected by the topic, database schemas and migration history (if relevant), test patterns, configuration and deployment.
-3. **Read memory stores if present** (optional enhancement, not required): if `~/.claude/memory/MEMORY.md` exists, read it for cross-project preferences, corrections, and conventions. If `.claude/memory/MEMORY.md` exists, read it plus its `graph.json` (from `/learn-project`) for project-level decisions, conventions, gotchas, and patterns. Load the relevant fact files from each store that is present. Use what you find to inform Considered Alternatives (reference a named pattern where one applies) and to avoid re-proposing something already rejected. If both stores are present: a project fact that contradicts a global one wins for this repo; surface any conflict bearing on the decision rather than silently choosing. If no memory store is present, skip this step silently and proceed on the codebase alone.
+3. **Read memory stores if present** (optional enhancement, not required): if `~/.claude/memory/MEMORY.md` exists, read it for cross-project preferences, corrections, and conventions. If `~/.claude/memory/<owner>/<repo>/MEMORY.md` exists (`<owner>/<repo>` derived from `git remote get-url origin`), read it for project-level decisions, conventions, gotchas, and patterns. Load the relevant fact files from each store that is present. Use what you find to inform Considered Alternatives (reference a named pattern where one applies) and to avoid re-proposing something already rejected. If both stores are present: a project fact that contradicts a global one wins for this repo; surface any conflict bearing on the decision rather than silently choosing. If no memory store is present, skip this step silently and proceed on the codebase alone.
 4. **Summarise findings to the user:** what's relevant to the topic, which areas are affected, existing patterns/constraints, and applicable patterns from memory if a memory store was present (with brief rationale).
 
-**Knowledge capture:** if a project memory store is present at `.claude/memory/`, write any durable convention or gotcha revealed by exploration as a project memory fact now. If no memory store is present, skip this step silently.
+**Knowledge capture:** if a project store is present at `~/.claude/memory/<owner>/<repo>/`, write any durable convention or gotcha revealed by exploration as a project memory fact now. If no project store is present, skip this step silently.
 
 Wait for the user to acknowledge before Stage 2.
 
@@ -139,7 +139,7 @@ Requirements:
 - The Decision section gives the reasoning for rejecting each alternative.
 - **Diagrams:** keep them readable, label nodes meaningfully, pick the right type (flowchart for components, sequence for interactions, state for lifecycles, ER for schemas). Always include current-state and proposed-state.
 
-**Knowledge capture:** if a project memory store is present at `.claude/memory/`, record the decision and each rejected alternative as memory facts (so future planning, including `/scope`, doesn't re-propose them). If no memory store is present, skip this step silently.
+**Knowledge capture:** if a project store is present at `~/.claude/memory/<owner>/<repo>/`, record the decision and each rejected alternative as memory facts (so future planning, including `/scope`, doesn't re-propose them). If no project store is present, skip this step silently.
 
 Present the draft. Revise in place on feedback. Repeat until the user explicitly approves.
 
@@ -208,11 +208,11 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the record (and bluep
 Confidence: HIGH | MEDIUM | LOW
 ```
 
-After it returns, if a project memory store is present at `.claude/memory/`, persist any durable gotcha as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
+After it returns, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist any durable gotcha as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
 
 ### Phase 2: Adversarial Review
 
-Spawn a **general-purpose** agent with the record, blueprint, and the Phase 1 report. It challenges the decision: simpler alternatives, scope creep, over-engineering, missing error paths, blast radius, contradictions with the fact-check. After it returns, if a project memory store is present at `.claude/memory/`, record any rejected simpler alternative (with reasoning) as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
+Spawn a **general-purpose** agent with the record, blueprint, and the Phase 1 report. It challenges the decision: simpler alternatives, scope creep, over-engineering, missing error paths, blast radius, contradictions with the fact-check. After it returns, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, record any rejected simpler alternative (with reasoning) as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
 
 ### Phase 3: Test Review
 
@@ -248,7 +248,7 @@ After the gate passes (or is overridden):
 1. **Update the record:** Status Proposed → Accepted, and bump Date modified to today.
 2. **Verify the blueprint** (if any): its Parent ADR reference points to the correct record path.
 3. **Save the quality report** to `{DIR}/{base}-quality.md`.
-4. **Refresh the memory graph:** if a project memory store is present at `.claude/memory/` and you wrote any memory facts for this decision, rebuild the project `graph.json` with `/learn-project --graph-only` so it stays current. If no memory store is present, skip this step silently.
+4. **Memory graph:** if a project store is present at `~/.claude/memory/<owner>/<repo>/` and you wrote any memory facts for this decision, the graph rebuilds automatically on fact save via the PostToolUse hook. Otherwise skip silently.
 5. **Report** the final file paths to the user.
 
 ### Kebab Title Convention

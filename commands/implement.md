@@ -98,11 +98,11 @@ If the plan or ADR blueprint ends with a "Confidence + open items" trailer, read
 ## Step 3: Load Standards and Context
 
 - Invoke the `engineering-standards` skill (testing requirements, mocking, PR readiness, deployment), the `grounding-research` skill (verify before asserting), and `writing-style` (for any prose, e.g. commit messages and the PR body).
-- If a memory store is present, load it: check whether `~/.claude/memory/MEMORY.md` exists and, if so, read it (cross-project preferences, corrections, conventions); check whether `.claude/memory/MEMORY.md` exists and, if so, read it plus its `graph.json` (from `/learn-project`), loading the relevant fact files for conventions, gotchas, and prior decisions. Honor the typed edges: a project fact that contradicts a global one wins for this repo, and surface any conflict bearing on the work rather than silently choosing. If neither store is present, skip this step silently and proceed on the codebase and the plan alone.
+- If a memory store is present, load it: check whether `~/.claude/memory/MEMORY.md` exists and, if so, read it (cross-project preferences, corrections, conventions); check whether `~/.claude/memory/<owner>/<repo>/MEMORY.md` exists (`<owner>/<repo>` derived from `git remote get-url origin`) and, if so, read it, loading the relevant fact files for conventions, gotchas, and prior decisions. Honor the typed edges: a project fact that contradicts a global one wins for this repo, and surface any conflict bearing on the work rather than silently choosing. If neither store is present, skip this step silently and proceed on the codebase and the plan alone.
 - Read every file the plan references before changing it (grounding).
 - **Detect the stack** to know the verify commands: check `tsconfig.json` / `package.json` (TS/JS), `pyproject.toml` / `setup.py` (Python), `go.mod` (Go), `Cargo.toml` (Rust). Derive the type-check / lint / test commands from what you find.
 
-**Knowledge capture:** when you discover a durable convention or gotcha, write it as a project memory fact only if a project memory store is present (`.claude/memory/` exists); otherwise skip silently.
+**Knowledge capture:** when you discover a durable convention or gotcha, write it as a project memory fact only if a project store is present at `~/.claude/memory/<owner>/<repo>/`; otherwise skip silently.
 
 ## Step 4: Quality Gate (conditional)
 
@@ -112,7 +112,7 @@ If the plan came from `/scope` or `/adr` it already has a companion `*-quality.m
 2. **Adversarial Review** (`general-purpose` agent + the fact-check report): simpler alternatives, scope creep, missing error paths, blast radius.
 3. **Test Review** (`Explore` agent, under `engineering-standards`): regression-pinning, flakiness, independence, mock quality, assertion strength.
 
-Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the user explicitly overrides (or `--auto --force`). If a project memory store is present (`.claude/memory/` exists), record gotchas and rejected alternatives as memory facts; otherwise skip silently.
+Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the user explicitly overrides (or `--auto --force`). If a project store is present at `~/.claude/memory/<owner>/<repo>/`, record gotchas and rejected alternatives as memory facts; otherwise skip silently.
 
 ## Step 5: Execute (delegated subagents, reviewed)
 
@@ -221,8 +221,7 @@ Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tes
 - Fix and re-validate until green.
 - **Doc audit:** every new/modified function has a doc comment explaining WHY; add any that are missing.
 - **Update status:** change the plan's `Status: Proposed` to `Status: Implemented`.
-- **Memory capture:** if a project memory store is present (`.claude/memory/` exists), record notable errors and their fixes as memory facts; otherwise skip silently.
-- **Refresh the memory graph:** if a project memory store is present and you wrote any memory facts this run, rebuild the project `graph.json` with `/learn-project --graph-only`; otherwise skip silently.
+- **Memory capture:** if a project store is present at `~/.claude/memory/<owner>/<repo>/`, record notable errors and their fixes as memory facts; otherwise skip silently. The graph rebuilds automatically on fact save via the PostToolUse hook.
 
 In `--auto`, after validation passes, continue to the refinement pass (Step 8). The PR opens at the end of Step 9, after the refinement and adversarial review pass, not here.
 

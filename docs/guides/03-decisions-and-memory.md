@@ -1,6 +1,6 @@
 # Decisions and Memory
 
-Two commands handle durable knowledge. `/adr` records architectural decisions with an optional execution blueprint. `/learn-project` analyses the repo and stores what it learns as memory facts. Both read from the same two-level memory system, and both write only to git-ignored directories.
+Two commands handle durable knowledge. `/adr` records architectural decisions with an optional execution blueprint. `/learn-project` analyses the repo and stores what it learns as memory facts. Both read from the same memory system, and both write only to git-ignored directories.
 
 ## /adr: Recording a Decision
 
@@ -10,7 +10,7 @@ The practical split: `/adr` produces a decision record plus an optional executio
 
 ### The flow
 
-1. **Investigate.** Before drafting, the command explores the codebase, reads both memory stores (global and project), and summarises findings. It waits for your acknowledgement before moving on.
+1. **Investigate.** Before drafting, the command explores the codebase, reads the memory store (global and project facts), and summarises findings. It waits for your acknowledgement before moving on.
 2. **Draft.** Writes the record and (unless you pass `--record-only`) the execution blueprint. Both go under revision until you explicitly approve.
 3. **Quality gate.** Three sequential agent phases: fact-check (paths, signatures, dependency graph), adversarial review (simpler alternatives, scope creep, blast radius), and test review (blueprint test plan against engineering standards). A FAIL blocks finalisation.
 4. **Finalise.** Status flips from Proposed to Accepted, the quality report saves alongside the record, and the command reports all file paths.
@@ -39,7 +39,7 @@ During investigation, any durable conventions or gotchas discovered get written 
 
 ## /learn-project: Building Project Knowledge
 
-`/learn-project` reads the repo broadly, distils what it finds into atomic facts, and writes them to memory. It's read-only on the project: the only writes are files under `.claude/memory/` and one `.gitignore` line.
+`/learn-project` reads the repo broadly, distils what it finds into atomic facts, and writes them to memory. It's read-only on the project: the only writes are fact files under `~/.claude/memory/`.
 
 Sources it reads (when available):
 - Git history: churn hotspots, commit conventions, contributors.
@@ -49,17 +49,19 @@ Sources it reads (when available):
 
 It collects in parallel, then analyses findings into clusters: architecture, conventions, domain glossary, decisions, infrastructure, setup, scripts, database, and data access patterns. Before writing anything, it shows you a table of candidate facts and asks once. It won't write without your confirmation.
 
-The result: one fact file per topic, plus a `graph.json` of the full fact graph, both in `<repo>/.claude/memory/`. Run with `--refresh` to re-derive and supersede existing facts. Run with `--graph-only` after hand-editing facts to rebuild the graph without re-collecting.
+The result: one fact file per topic in `~/.claude/memory/<owner>/<repo>/`. The single `~/.claude/memory/graph.json` rebuilds automatically after each fact save. Run with `--refresh` to re-derive and supersede existing facts. Run with `--graph-only` after hand-editing facts to rebuild the graph without re-collecting.
 
 ## The Memory Model
 
-Two levels, same shape.
+One store, two scopes.
 
-**Global** at `~/.claude/memory/`: facts that apply across all repos, like preferences, cross-project conventions, and external pointers.
+**Global**: flat files directly in `~/.claude/memory/`, indexed by `~/.claude/memory/MEMORY.md`. Facts that apply across all repos, like preferences, cross-project conventions, and external pointers.
 
-**Per-project** at `<repo>/.claude/memory/`: facts true only inside that repo. The directory is git-ignored, so the files never get committed. The project index gets injected at session start, making those facts available without manual loading.
+**Project**: files under `~/.claude/memory/<owner>/<repo>/`, where `<owner>/<repo>` is derived from `git remote get-url origin`. Facts true only inside that repo. The project index gets injected at session start, making those facts available without manual loading.
 
-Both stores use the same format: one fact per file, kebab-case filename, with frontmatter and a structured body.
+The whole `~/.claude/memory/` tree is git-ignored, so no facts are ever committed.
+
+Both scopes use the same format: one fact per file, kebab-case filename, with frontmatter and a structured body.
 
 ```markdown
 ---
@@ -91,7 +93,7 @@ Edges live in the `links:` frontmatter block. Values are bare basenames (no path
 | `relates_to` | Symmetric neighbor. Pull it in when the topic is related. |
 | `contradicts` | Symmetric conflict. Surface the conflict when both facts are live; don't silently pick one. |
 
-Project facts win over global for that repo. Contradictions between the two levels surface rather than resolve silently.
+Project facts win over global for that repo. Contradictions between the two scopes surface rather than resolve silently.
 
 ### Where facts live
 
@@ -110,7 +112,7 @@ A decision record for a small, realistic choice.
 
 **Context**
 
-Facts under `.claude/memory/` are written by multiple commands and referenced by name from `MEMORY.md` index entries. Three naming styles appeared in early practice: `snake_case`, `camelCase`, and `kebab-case`.
+Facts under `~/.claude/memory/` are written by multiple commands and referenced by name from `MEMORY.md` index entries. Three naming styles appeared in early practice: `snake_case`, `camelCase`, and `kebab-case`.
 
 **Decision Drivers**
 
