@@ -184,7 +184,7 @@ done
 **Commit per Work Unit (MUST): small commits.** One coherent commit per WU.
 
 - **Parallel wave (worktree):** the implementer commits its WU inside its worktree, staging exactly its `Files` (it does not push). During integration the orchestrator cherry-picks each commit onto the main branch in dependency order, then pushes the branch once (`git push`). Confirm each WU's files landed (`git log --stat`).
-- **Single-WU wave (main tree):** after the orchestrator review passes, stage exactly that WU's files (`git add <the WU's Files list>`) and run `/commit-and-push -y`. Confirm the files are committed (they no longer appear in `git status --porcelain`).
+- **Single-WU wave (main tree):** after the orchestrator review passes, stage exactly that WU's files (`git add <the WU's Files list>`) and run `/commit-and-push`. Confirm the files are committed (they no longer appear in `git status --porcelain`).
 
 If a commit or cherry-pick fails, retry once, then stop and report.
 
@@ -216,7 +216,7 @@ Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or h
 
 ## Step 7: Validate
 
-Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, spawn a Sonnet Task to fix the responsible WU, then amend via `/commit-and-push -ya` (max 3 attempts; if still failing, stop and do NOT open a PR).
+Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, spawn a Sonnet Task to fix the responsible WU, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open a PR).
 
 - Fix and re-validate until green.
 - **Doc audit:** every new/modified function has a doc comment explaining WHY; add any that are missing.
@@ -232,7 +232,7 @@ Once the implementation is green, run ONE refinement pass over the code you just
 1. **Self quick-review (local).** Apply the `grounding-review` discipline to the branch diff: severity-classified findings, each with `file:line` evidence. Keep it local; don't post anything. Fix only the findings you hold with HIGH confidence (clear bug, dead code, obvious simplification). Leave low-confidence or speculative findings for the adversarial review (Step 9); don't guess.
 2. **Simplify & refactor analysis.** Read the changed files through the Design principles (SOLID, DRY, KISS, YAGNI). List concrete, behaviour-preserving changes: collapse needless indirection, delete dead or speculative code, dedupe real repetition, flatten tangled control flow, tighten names. Skip anything that changes behaviour or adds abstraction with no second caller.
 3. **Re-plan.** Fold the high-confidence fixes and accepted simplifications into a small set of refinement Work Units (same shape as a `/scope` plan: `Files`, `Requires`, `Done When`). Scope is limited to code already written. If a finding implies new feature work, record it as a follow-up; don't build it.
-4. **Execute autonomously.** Run the refinement Work Units like `--auto`: TDD where it applies, behaviour-preserving refactors keep tests green, commit each WU with `/commit-and-push -y`. Then re-run the validation checks from Step 7 (type-check/lint/test only, not the status flip or the continue-to-Step-8 handoff); they MUST stay green.
+4. **Execute autonomously.** Run the refinement Work Units like `--auto`: TDD where it applies, behaviour-preserving refactors keep tests green, commit each WU with `/commit-and-push`. Then re-run the validation checks from Step 7 (type-check/lint/test only, not the status flip or the continue-to-Step-8 handoff); they MUST stay green.
 
 Run this pass once. Don't loop: Step 9 is the backstop for whatever remains.
 
