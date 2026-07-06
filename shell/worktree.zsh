@@ -185,11 +185,13 @@ _wt_cleanup_stale() {
     git worktree prune 2>/dev/null || true
 }
 
-# Pop the main-worktree auto-stash, if we took one (called from `always {}`)
+# Pop the main-worktree auto-stash, if we took one (called from `always {}`).
+# Use `git -C` rather than `cd`: this runs after _wt_main has cd'd the shell into
+# the new worktree, and cd-ing back to main here would strand the shell there, so
+# the session would start on the base branch instead of the new one.
 _wt_restore_stash() {
     (( STASH_APPLIED )) || return 0
-    cd "$MAIN_WORKTREE" 2>/dev/null || true
-    git stash pop --quiet 2>/dev/null || true
+    git -C "$MAIN_WORKTREE" stash pop --quiet 2>/dev/null || true
 }
 
 # The body: everything that can fail with `return`. Dynamic scoping lets it and
