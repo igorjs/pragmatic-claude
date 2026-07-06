@@ -62,7 +62,7 @@ cc                     # resume this directory's last session, or start fresh
 ccd                    # same, with --dangerously-skip-permissions
 cc fresh               # new session, no history
 cc list                # recent sessions for this directory
-cc clean               # resume with /model, /effort, /output-style overrides stripped
+cc clean               # resume with /model, /effort, /config, /output-style, /style stripped
 cc raw [id]            # resume verbatim, no fork or cleanup
 cc worktree <branch>   # create/enter a git worktree, then start a session there
 cc new <branch>        # alias for cc worktree
@@ -114,10 +114,12 @@ Skills live in `skills/` and load on demand. See [docs/authoring/01-commands-ski
 
 ## Memory
 
-Two levels, both markdown:
+One markdown store at `~/.claude/memory/`, local-only (git-ignored at the `.claude` level, never committed):
 
-- Global: `~/.claude/memory/`, for cross-project facts.
-- Per-project: `<repo>/.claude/memory/`, kept local-only via `.gitignore`, injected at session start.
+- Global facts sit flat in `~/.claude/memory/`, indexed by `MEMORY.md`.
+- Project facts live under `~/.claude/memory/<owner>/<repo>/`, where `<owner>/<repo>` comes from the repo's git remote. Each project subfolder keeps its own `MEMORY.md`, injected at session start.
+
+A single `graph.json` covers every fact, global and project, and rebuilds automatically whenever a fact file is saved. See [docs/concepts/02-memory-system.md](docs/concepts/02-memory-system.md).
 
 ## Layout
 

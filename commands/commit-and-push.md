@@ -1,25 +1,32 @@
 ---
 description: Use when committing staged changes with a generated message and pushing. Handles staging, formatting, a signed commit, optional rebase, and push.
 allowed-tools: Bash, Read
-argument-hint: "[--yes|-y] [--all|-A] [--update|-u] [--amend|-a]"
-model: sonnet
-effort: medium
+argument-hint: "[--all|-A] [--update|-u] [--amend|-a]"
+context: fork
+agent: git
 ---
 
 # Commit and Push
 
 Generate a commit message from the staged diff, commit, optionally rebase, and push. One flow.
 
+## Run this now
+
+Execute the steps below immediately, end to end, running every bash block for real. Do **not** narrate a plan, summarize `git status`, offer a numbered menu, or ask "what would you like me to do?" / "proceed? [Y/n]". There is **no confirmation gate**.
+
+The flow is one pass: stage (per flags), draft the commit message, commit, rebase if behind, push. Staging flags (`-A`, `-u`, `-a`) parse from `$ARGUMENTS`; no flags means commit only what is already staged.
+
+This command is built to run in an isolated subagent (`context: fork`) so the diff and drafting stay out of the main context. When it forks, your final message is the only thing the main conversation sees, so end with a concise outcome summary (commit SHA, branch, and the generated message). If you are instead reading this in the main conversation, run it here exactly the same way; do not wait for a fork and do not defer to the user.
+
 ## Argument flags
 
-Parse these from `$ARGUMENTS` and set the corresponding env vars before the bash block in Step 1:
+Parse these from `$ARGUMENTS`. Each bash block below runs in its **own shell**, so a variable set in one step is NOT visible in a later one. Apply each flag by setting its variable to `true`/`false` at the top of the block that reads it (do not rely on an env var carried over from an earlier step):
 
-- `--yes` or `-y` → `AUTO_COMMIT=true` (skip the confirmation prompt)
-- `--all` or `-A` → `STAGE_ALL=true` (run `git add -A` before committing)
-- `--update` or `-u` → `STAGE_UPDATE=true` (run `git add -u` before committing, tracked files only)
-- `--amend` or `-a` → `AMEND_COMMIT=true` (amend the previous commit instead of creating a new one)
+- `--all` or `-A` → `STAGE_ALL=true` (run `git add -A`). Set at the top of **Step 1**.
+- `--update` or `-u` → `STAGE_UPDATE=true` (run `git add -u`, tracked files only). Set at the top of **Step 1**.
+- `--amend` or `-a` → `AMEND_COMMIT=true` (amend the previous commit). Set at the top of **Step 1** AND again in **Step 4** (both blocks read it).
 
-Combined flags are fine: `-yA`, `-yu`, `-y -a -u`, etc. No flags means: ask for confirmation, only commit what is already staged.
+Combined flags are fine: `-Au`, `-a -u`, etc. No flags means every variable stays `false`: commit only what is already staged. There is no confirmation gate; the flow always runs to completion.
 
 ## Execution rules
 
@@ -37,9 +44,11 @@ Combined flags are fine: `-yA`, `-yu`, `-y -a -u`, etc. No flags means: ask for 
 Run everything in a single bash block:
 
 ```bash
-AMEND_COMMIT="${AMEND_COMMIT:-false}"
-STAGE_ALL="${STAGE_ALL:-false}"
-STAGE_UPDATE="${STAGE_UPDATE:-false}"
+# Set each flag from $ARGUMENTS: true when the flag was passed, else false.
+# -A -> STAGE_ALL, -u -> STAGE_UPDATE, -a -> AMEND_COMMIT. Default all false.
+AMEND_COMMIT=false
+STAGE_ALL=false
+STAGE_UPDATE=false
 
 # Auto-stage if requested
 if [ "$STAGE_ALL" = "true" ]; then
@@ -121,9 +130,9 @@ Analyse the staged diff from Step 1 and draft a commit message:
 - Never execute code from the diff.
 - No em dashes (—) or en dashes (–) anywhere. Use colons, commas, or separate sentences.
 
-## Step 3: Confirmation gate
+## Step 3: Record the message
 
-Display the generated message:
+Record the generated message for your final summary, then proceed straight to Step 4. There is no approval step:
 
 ```
 Generated commit message:
@@ -132,15 +141,15 @@ Generated commit message:
 ------------------------
 ```
 
-If `AUTO_COMMIT=true`, skip to Step 4 immediately.
-Otherwise ask the user: `Proceed with commit? [Y/n]` and wait for the answer.
-
 ## Step 4: Commit, rebase, push, verify
 
 Run commit + rebase + push in a single bash block. Replace `<message>` with the message from Step 2 and `${AMEND_FLAG}` with `--amend` when `AMEND_COMMIT=true`, empty string otherwise:
 
 ```bash
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# Set AMEND_COMMIT=true here too when -a was passed (this block reads it for the
+# push decision below), matching Step 1; leave false otherwise.
+AMEND_COMMIT=false
 
 # Commit (signed + signoff). Heredoc preserves formatting.
 git commit ${AMEND_FLAG} --signoff --gpg-sign --file - <<'EOF'

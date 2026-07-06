@@ -4,17 +4,16 @@ Once a branch is ready, this config gives you three commands to get it reviewed 
 
 ## `/commit-and-push`
 
-Generates a commit message from the staged diff, commits signed (`--gpg-sign --signoff`), rebases onto the base branch if you're behind, then pushes.
+Generates a commit message from the staged diff, commits signed (`--gpg-sign --signoff`), rebases onto the base branch if you're behind, then pushes. It runs in an isolated subagent (`context: fork`) on Haiku, so the diff and drafting stay out of your main context. There is no confirmation gate: it commits and pushes end to end.
 
 ```bash
-/commit-and-push           # commit staged changes, confirm before pushing
-/commit-and-push -y        # skip the confirmation prompt
+/commit-and-push           # commit staged changes and push
 /commit-and-push -A        # stage all files (git add -A), then commit
 /commit-and-push -u        # stage tracked files only (git add -u), then commit
 /commit-and-push -a        # amend the previous commit instead of creating a new one
 ```
 
-Flags combine: `-yA` stages everything and skips confirmation. `-y -a` amends without prompting.
+Flags combine: `-Au`, `-a -u`, and so on.
 
 If the branch is behind the base, it rebases automatically before pushing. After a rebase or amend, it uses `--force-with-lease` so the push fails safely if the remote moved unexpectedly. Hooks run normally; if one fails, fix the issue and commit again rather than skipping it.
 
@@ -90,7 +89,7 @@ Bot authors (CodeRabbit, Copilot review, Greptile, github-actions, and others) a
 
 ```bash
 # 1. Branch is ready. Stage and commit.
-/commit-and-push -yA
+/commit-and-push -A
 
 # 2. Self-review before asking others.
 /quick-review           # or /deep-review for a bigger change

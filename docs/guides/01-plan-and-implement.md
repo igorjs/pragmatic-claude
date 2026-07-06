@@ -69,7 +69,7 @@ With no arguments, it lists saved plans to pick from. If the reference isn't a r
 
 Pass `--no-tdd` to write tests and implementation together instead.
 
-**One commit per Work Unit.** After the orchestrator reviews a completed WU, it stages exactly that WU's files and runs `/commit-and-push -y`. Each deliverable becomes its own small commit, even when WUs ran concurrently.
+**One commit per Work Unit.** After the orchestrator reviews a completed WU, it stages exactly that WU's files and runs `/commit-and-push`. Each deliverable becomes its own small commit, even when WUs ran concurrently.
 
 **After all Work Units.** `/implement` runs a refinement pass: a self quick-review plus a SOLID/DRY/KISS/YAGNI simplify analysis, folded into refinement Work Units and executed autonomously. Then an adversarial subagent reviews the full branch diff. Blocking findings get fixed and re-validated. Non-blocking ones become follow-ups.
 

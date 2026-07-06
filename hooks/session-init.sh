@@ -60,16 +60,20 @@ fi
 [[ -n "$current_hash" && "$source" == "startup" ]] && \
   printf '%s' "$current_hash" > "$hash_file" 2>/dev/null
 
-# ── Per-project memory ──
-# Project memory lives in <repo-root>/.claude/memory/, kept out of git via
-# .git/info/exclude. Inject the index lines only; fact bodies are read on
-# demand. No-op outside a git repo or when the repo has no project memory.
+# ── Project memory ──
+# Project facts live in the central store at ~/.claude/memory/<owner>/<repo>/,
+# where <owner>/<repo> is derived from the repo's origin remote. The whole
+# store is git-ignored at the .claude level. Inject the index lines only; fact
+# bodies are read on demand. No-op outside a git repo, with no origin remote,
+# or when the repo has no project store yet.
 _repo_root="$(git --no-optional-locks rev-parse --show-toplevel 2>/dev/null)"
-_mem_index="$_repo_root/.claude/memory/MEMORY.md"
-if [[ -n "$_repo_root" && -f "$_mem_index" ]]; then
+_mem_slug="$(git --no-optional-locks remote get-url origin 2>/dev/null \
+  | sed -E 's#\.git/?$##; s#^[a-zA-Z]+://##; s#^[^@/]+@##; s#^[^/:]+[:/]##')"
+if [[ -n "$_repo_root" && -n "$_mem_slug" && -f "$HOME/.claude/memory/$_mem_slug/MEMORY.md" ]]; then
+  _mem_index="$HOME/.claude/memory/$_mem_slug/MEMORY.md"
   _mem_body="$(head -c 16000 "$_mem_index" 2>/dev/null)"
   if [[ -n "$_mem_body" ]]; then
-    _mem_ctx="Project memory for this repo ($(basename "$_repo_root")), stored locally at $_repo_root/.claude/memory/. These facts apply only in this repo; read the referenced fact files on demand. Index:
+    _mem_ctx="Project memory for this repo ($_mem_slug), stored in the central memory store at ~/.claude/memory/$_mem_slug/. These facts apply only in this repo; read the referenced fact files on demand. Index:
 $_mem_body"
     if [[ -n "$extra_context" ]]; then
       extra_context="$extra_context

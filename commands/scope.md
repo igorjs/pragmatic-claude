@@ -37,7 +37,7 @@ OPTIONS:
   --help   Show this help
 
 Asks one question at a time with a recommended answer. Explores the codebase
-and both memory stores (global `~/.claude/memory/` + project `.claude/memory/`, plus `graph.json` from `/learn-project`) when they exist to answer
+and the memory store (`~/.claude/memory/` for global facts, `~/.claude/memory/<owner>/<repo>/` for project facts, `<owner>/<repo>` derived from the git remote) when it exists to answer
 questions itself before asking you. Memory is optional: when neither store is present, it relies on the codebase alone. Walks decision trees, runs a 3-phase
 quality gate, and produces a verified, self-contained plan broken into small
 Work Units (some flagged parallel-safe) that you can run with /implement (or
@@ -64,7 +64,7 @@ If the argument looks like a file path (starts with `./`, `../`, `/`, or `~`, or
 
 This happens before Step 1. The loaded content replaces the raw argument as the topic seed.
 
-**When a file path is provided, the file IS the context (MUST).** Do NOT explore the repo beyond what the file explicitly references. Skip the general repo exploration in Step 1 (no git log, no TODO scan, no manifest scan). If a memory store is present, read it (global `~/.claude/memory/` and/or project `.claude/memory/`); when neither exists, skip this and proceed with the file content alone. Beyond memory, read ONLY the file, then go straight to your first question based on its content. If the file references specific source files, modules, or APIs by name, you may read those, but do NOT go looking for things the file does not mention.
+**When a file path is provided, the file IS the context (MUST).** Do NOT explore the repo beyond what the file explicitly references. Skip the general repo exploration in Step 1 (no git log, no TODO scan, no manifest scan). If a memory store is present, read it (global `~/.claude/memory/` and/or project `~/.claude/memory/<owner>/<repo>/`); when neither exists, skip this and proceed with the file content alone. Beyond memory, read ONLY the file, then go straight to your first question based on its content. If the file references specific source files, modules, or APIs by name, you may read those, but do NOT go looking for things the file does not mention.
 
 **Ignore `.gitignore`d files (MUST).** Don't read files matched by `.gitignore` (PDFs, build artefacts, binaries, vendor dirs, `.env`), even if the prompt file mentions them. Only read tracked source files.
 
@@ -76,7 +76,7 @@ Enable when `--auto` appears in the arguments; strip it (like `--help`) before r
 - **Record assumptions.** Every self-made decision goes into an **Assumptions** list with its rationale, so the user can audit what was chosen for them. When you're genuinely split on a decision, record it as an `OPEN` assumption (with the leading option and why) rather than silently picking.
 - **Skip the confirmation gates.** Do not pause at Step 3 ("Does this capture everything?") or Step 6 ("Does this plan look right?"). Fold the Design Summary and the Assumptions list into the saved plan instead.
 - **Quality gate still runs (Step 5).** It needs no user input. If a phase still FAILs after its 3 iterations, STOP: do not save; report the failing checks and the assumptions made. No user is present to override a FAIL in `--auto`.
-- **Save and report (Step 7).** On a passing gate, save the plan and quality report, then tell the user the paths, the assumptions made (flag any `OPEN` ones), and to run `/implement` when ready. If a project memory store is present, persist the accepted decisions there; otherwise skip.
+- **Save and report (Step 7).** On a passing gate, save the plan and quality report, then tell the user the paths, the assumptions made (flag any `OPEN` ones), and to run `/implement` when ready. If a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist the accepted decisions there; otherwise skip.
 
 ## Design Doc Handoff (from `/brainstorm`)
 
@@ -102,7 +102,7 @@ With no design doc, `/scope` behaves exactly as before.
 
 With a plain-text topic seed, silently research before asking anything:
 
-- If a memory store is present, read it: check for the global store at `~/.claude/memory/MEMORY.md` (cross-project preferences, corrections, conventions) and the project store at `.claude/memory/MEMORY.md` plus its `graph.json` (built by `/learn-project`). Load the relevant fact files from whichever stores exist. This is the durable knowledge: architecture, conventions, decisions, gotchas. Honor the typed edges; when a project fact contradicts a global one it wins for this repo, and surface any conflict bearing on the plan rather than silently choosing. When neither store exists, skip this bullet and proceed on the codebase alone.
+- If a memory store is present, read it: check for the global store at `~/.claude/memory/MEMORY.md` (cross-project preferences, corrections, conventions) and the project store at `~/.claude/memory/<owner>/<repo>/MEMORY.md` (`<owner>/<repo>` derived from `git remote get-url origin`). Load the relevant fact files from whichever stores exist. This is the durable knowledge: architecture, conventions, decisions, gotchas. Honor the typed edges; when a project fact contradicts a global one it wins for this repo, and surface any conflict bearing on the plan rather than silently choosing. When neither store exists, skip this bullet and proceed on the codebase alone.
 - Check recent git log for context.
 - If the topic seed mentions files, modules, or features, read them.
 - Read the README and whatever build manifest exists (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, etc.) for project context.
@@ -138,7 +138,7 @@ Types of questions, in roughly this order (adapt):
 
 Between questions, explore the codebase if the answer reveals new areas. Report what you found before asking the next question.
 
-**Knowledge capture (memory).** When exploration reveals a durable convention or gotcha about the codebase (true regardless of this plan), and a project memory store is present at `.claude/memory/`, persist it as a project memory fact right then: a kebab-case file in `.claude/memory/` with `name`/`description`/`type: project`/`links:`/`anchors:` (to the files), plus its `MEMORY.md` index line. When no project memory store is present, skip this step silently. Track each confirmed *plan decision* in the running plan draft; those are persisted at Step 7, not now.
+**Knowledge capture (memory).** When exploration reveals a durable convention or gotcha about the codebase (true regardless of this plan), and a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist it as a project memory fact right then: a kebab-case file in `~/.claude/memory/<owner>/<repo>/` with `name`/`description`/`type: project`/`links:`/`anchors:` (to the files), plus its `MEMORY.md` index line. When no project store is present, skip this step silently. Track each confirmed *plan decision* in the running plan draft; those are persisted at Step 7, not now.
 
 ### Step 3: Confirm Understanding
 
@@ -252,7 +252,7 @@ Returns a structured PASS / FAIL / WARN report. Phase 1 folds a Verification Sum
 Confidence: HIGH | MEDIUM | LOW
 ```
 
-Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
+Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist any durable gotcha it found as a memory fact; otherwise skip. **If any FAILs:** revise the plan and re-run Phase 1 (max 3 iterations). Don't proceed until it passes.
 
 #### Phase 2: Adversarial Review
 
@@ -276,7 +276,7 @@ Spawn an **Explore** agent with the plan's Testing Strategy and the Phase 1 repo
 - Mock quality (mock at the boundary; don't mock another service's tables).
 - Assertion strength.
 
-Returns a structured report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project memory store is present at `.claude/memory/`, persist any durable test-quality pattern as a memory fact; otherwise skip. **If any FAILs:** revise the test plan and re-run Phase 3 (max 3 iterations).
+Returns a structured report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist any durable test-quality pattern as a memory fact; otherwise skip. **If any FAILs:** revise the test plan and re-run Phase 3 (max 3 iterations).
 
 #### Quality Gate Result
 
@@ -322,7 +322,7 @@ grep -qxF '.claude/plans/' "$ROOT/.gitignore" 2>/dev/null || printf '.claude/pla
 Then:
 
 1. Save the plan to `.claude/plans/<topic-slug>.md` and the gate reports to `.claude/plans/<topic-slug>-quality.md`.
-2. If a project memory store is present at `.claude/memory/`, persist the plan's accepted key decisions as project memory facts (`type: project`, `anchors:` to the files they touch), update `MEMORY.md`, then refresh the graph with `/learn-project --graph-only`. Otherwise skip.
+2. If a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist the plan's accepted key decisions as project memory facts (`type: project`, `anchors:` to the files they touch), and update `~/.claude/memory/<owner>/<repo>/MEMORY.md`. The graph rebuilds automatically on fact save via the PostToolUse hook. Otherwise skip.
 3. Tell the user:
    - "Saved to `.claude/plans/<topic-slug>.md`"
    - "Implement it when ready: `/implement .claude/plans/<topic-slug>.md` (or the `superpowers:executing-plans` skill)."
