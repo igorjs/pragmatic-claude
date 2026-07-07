@@ -10,9 +10,11 @@
 # `exit`, never sets global shell options, and restores the auto-stash through
 # a zsh `always {}` block instead of an EXIT trap.
 #
-# Features: JIRA-key folder naming (PROJECT-1234-foo -> PROJECT-1234/), .env copy,
-# upstream tracking, node_modules hardlink reuse, base-branch rebase, and a
-# daily-rate-limited background cleanup of merged/stale worktrees.
+# Features: a grouped worktree base dir (WORKTREE_BASE_DIR, default .worktrees)
+# holding <repo>/<folder>, JIRA-key folder naming (PROJECT-1234-foo ->
+# PROJECT-1234/), .env copy, upstream tracking, node_modules hardlink reuse,
+# base-branch rebase, and a daily-rate-limited background cleanup of
+# merged/stale worktrees.
 #
 # Flags: --ai-resolve (or WORKTREE_AI_RESOLVE=1) lets Claude resolve rebase
 # conflicts; otherwise a conflict just aborts the rebase.
@@ -23,6 +25,7 @@ _wt_help() {
     print -- 'cc worktree <branch> [env-base-folder]   (also ccd worktree)'
     print -- '  Create or enter a git worktree for <branch> and start a session in it.'
     print -- '  Folder name is the JIRA key in the branch, else the branch leaf.'
+    print -- '  Worktrees live in <repo-parent>/<base>/<repo>/<folder> (base = WORKTREE_BASE_DIR, default .worktrees).'
     print -- '  Claude auto-resolves rebase conflicts on your own branches (WORKTREE_AI_RESOLVE=0 disables).'
 }
 
@@ -40,6 +43,23 @@ _wt_base_branch() {
         done
     fi
     print -- "origin/${base:-master}"
+}
+
+# Resolve the base directory that holds this repo's worktrees: <base>/<repo>,
+# where <base> is WORKTREE_BASE_DIR (default .worktrees). A relative base sits
+# under the repo's parent; an absolute base is used as-is. The <repo> leaf keeps
+# same-named branches in sibling repos from colliding.
+# Args: 1=repo root, 2=repo parent. Echoes the resolved directory.
+_wt_resolve_base() {
+    local repo_root="$1" repo_parent="$2"
+    local repo_name="${repo_root##*/}"
+    local base="${WORKTREE_BASE_DIR:-.worktrees}"
+    [[ "$base" == "." ]] && base=".worktrees"   # never collapse into the repo root
+    if [[ "$base" == /* ]]; then
+        print -- "$base/$repo_name"
+    else
+        print -- "$repo_parent/$base/$repo_name"
+    fi
 }
 
 # Create a worktree, recovering from prune/repair if needed. Echoes the path.
@@ -208,6 +228,8 @@ _wt_main() {
 
     REPO_ROOT="$(git rev-parse --show-toplevel)"
     REPO_PARENT="$(dirname "$REPO_ROOT")"
+    WT_ROOT="$(_wt_resolve_base "$REPO_ROOT" "$REPO_PARENT")"
+    mkdir -p "$WT_ROOT" 2>/dev/null || true
 
     FETCH_CACHE="/tmp/.git-fetch-$(_wt_hash "$REPO_ROOT")"
     BASE_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
@@ -223,14 +245,14 @@ _wt_main() {
 
     JIRA_KEY="$(printf '%s' "$BRANCH" | grep -oiE '[A-Z]{2,}-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
     FOLDER="${JIRA_KEY:-${BRANCH##*/}}"
-    TARGET="$REPO_PARENT/$FOLDER"
+    TARGET="$WT_ROOT/$FOLDER"
 
     # Disambiguate: a JIRA-key folder already on a different branch -> use the leaf
     if [[ -d "$TARGET" && -n "$JIRA_KEY" && "$FOLDER" == "$JIRA_KEY" ]]; then
         local in_use
         in_use="$(git worktree list --porcelain | awk -v t="$TARGET" '$1=="worktree"{w=$2} w==t && $1=="branch"{sub("refs/heads/","",$2); print $2}')"
         if [[ -n "$in_use" && "$in_use" != "$BRANCH" ]]; then
-            FOLDER="${BRANCH##*/}"; TARGET="$REPO_PARENT/$FOLDER"
+            FOLDER="${BRANCH##*/}"; TARGET="$WT_ROOT/$FOLDER"
             print -u2 -- "Worktree $JIRA_KEY in use by '$in_use'. Using '$FOLDER' instead."
         fi
     fi
@@ -395,7 +417,7 @@ _cc_worktree() {
     setopt local_options no_nomatch 2>/dev/null || true
 
     local REMOTE="origin" BRANCH="" ENV_BASE_ARG="" AI_RESOLVE=0
-    local REPO_ROOT REPO_PARENT MAIN_WORKTREE BASE_REF JIRA_KEY FOLDER TARGET ENV_BASE FETCH_CACHE
+    local REPO_ROOT REPO_PARENT WT_ROOT MAIN_WORKTREE BASE_REF JIRA_KEY FOLDER TARGET ENV_BASE FETCH_CACHE
     local STASH_APPLIED=0 _wt_origin="$PWD" rc=0
 
     local a

@@ -34,7 +34,7 @@ What it does, in order:
 1. Detects the repo's base branch via `origin/HEAD`, falling back to `main`, `master`, `trunk`, or `develop`.
 2. Auto-stashes any dirty main worktree and restores it afterward via a `zsh always {}` block.
 3. Derives the folder name from the JIRA key in the branch name (`PROJECT-1234-foo-bar` → `PROJECT-1234/`). Falls back to the branch leaf when there's no JIRA key.
-4. Creates the worktree at `<repo-parent>/<folder>`, one level above the repo root. If the worktree already exists on the right branch, it fast-forward pulls instead.
+4. Creates the worktree at `<repo-parent>/<base>/<repo>/<folder>`, where `<base>` is `WORKTREE_BASE_DIR` (default `.worktrees`) and `<repo>` is the repo directory name, so worktrees from sibling repos that share a parent never collide. A relative `WORKTREE_BASE_DIR` sits under the repo's parent; an absolute one is used as-is. If the worktree already exists on the right branch, it fast-forward pulls instead.
 5. Copies `.env` from the base repo (no-clobber).
 6. Sets upstream tracking. Creates the remote branch via `git push -u` if it doesn't exist yet.
 7. Rebases the branch onto the latest base when the branch belongs to you. With `--ai-resolve`, rebase conflicts go to Claude haiku for resolution. Without it, a conflict aborts the rebase. This subcommand always passes `--ai-resolve`.
