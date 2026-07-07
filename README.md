@@ -70,7 +70,7 @@ cc new <branch>        # alias for cc worktree
 
 `cc` loads the system prompt, picks a model, and prunes old transcripts (keeps the newest 5; set `CCD_KEEP` to change, `CCD_KEEP=0` disables).
 
-`cc worktree` (also `ccd worktree`) creates or enters a worktree off the project's base branch. It names the folder after the JIRA key in the branch name, copies `.env`, reuses `node_modules` via hardlinks, sets upstream, and runs a daily background cleanup of merged or stale worktrees. Claude auto-resolves rebase conflicts (`--ai-resolve` is always set). Only available via `cc`/`ccd`. `cc new <branch>` is an alias for `cc worktree`.
+`cc worktree` (also `ccd worktree`) creates or enters a worktree off the project's base branch, grouped under `<repo-parent>/.worktrees/<repo>/<folder>` (set `WORKTREE_BASE_DIR` to change the base folder). It names the folder after the JIRA key in the branch name, copies `.env`, reuses `node_modules` via hardlinks, sets upstream, and runs a daily background cleanup of merged or stale worktrees. Claude auto-resolves rebase conflicts (`--ai-resolve` is always set). Only available via `cc`/`ccd`. `cc new <branch>` is an alias for `cc worktree`.
 
 ## Docs
 
