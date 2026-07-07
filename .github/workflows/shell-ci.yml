@@ -6,7 +6,7 @@
 #   - Bash syntax (bash -n) on all tracked .sh files
 #   - Zsh syntax (zsh -n) on all tracked .zsh files
 #   - settings.json well-formed JSON
-#   - Behavioral test suites (shell/review-worktree.test.sh, shell/gh-remote.test.sh, hooks/rm-workspace-guard.test.sh)
+#   - Behavioral test suites (shell/review-worktree.test.sh, shell/worktree.test.sh, shell/gh-remote.test.sh, hooks/rm-workspace-guard.test.sh)
 
 name: shell-ci
 
@@ -64,5 +64,6 @@ jobs:
           git config user.email "ci@github.local"
           git config user.name "CI"
           bash shell/review-worktree.test.sh
+          bash shell/worktree.test.sh
           bash shell/gh-remote.test.sh
           bash hooks/rm-workspace-guard.test.sh
