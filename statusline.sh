@@ -42,6 +42,13 @@ CI_CACHE_TTL="${STATUSLINE_CI_CACHE_TTL:-60}"        # Seconds before cached CI 
 # Created with 0700 perms (owner-only) on first run so cached PR bodies stay private.
 CACHE_DIR="${STATUSLINE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/statusline}"
 
+# GitHub remote parsing (github.com + GitHub Enterprise *.ghe.com) lives in a
+# standalone, unit-tested helper so the status line builds host-correct PR and
+# branch links. A missing file just leaves the GitHub segments disabled.
+STATUSLINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=shell/gh-remote.sh
+[[ -r "$STATUSLINE_DIR/shell/gh-remote.sh" ]] && source "$STATUSLINE_DIR/shell/gh-remote.sh"
+
 # ┌──────────────────────────────────────────────────────────────────────────────┐
 # │  Colour Palette: Catppuccin Mocha                                           │
 # │                                                                             │
@@ -324,11 +331,12 @@ if [[ "$SHOW_GIT" == true ]]; then
         # Parse origin remote once and reuse downstream. A missing remote (fresh
         # `git init`) or a non-GitHub host leaves gh_path empty, which is the
         # signal every gh-using block uses to bail out without spawning `gh`.
+        # gh_remote_parse accepts github.com and GitHub Enterprise (*.ghe.com)
+        # and yields the host, so the OSC 8 links point at the right domain.
         remote_url=$(git --no-optional-locks -C "$cwd" config --get remote.origin.url 2>/dev/null)
-        if [[ "$remote_url" =~ ^git@github\.com:(.+)$ ]] \
-            || [[ "$remote_url" =~ ^ssh://git@github\.com/(.+)$ ]] \
-            || [[ "$remote_url" =~ ^https?://github\.com/(.+)$ ]]; then
-            gh_path="${BASH_REMATCH[1]%.git}"
+        if gh_remote=$(gh_remote_parse "$remote_url" 2>/dev/null); then
+            gh_host="${gh_remote%%$'\t'*}"
+            gh_path="${gh_remote#*$'\t'}"
             repo_owner="${gh_path%%/*}"
             repo_name="${gh_path#*/}"
         fi
@@ -340,7 +348,7 @@ if [[ "$SHOW_GIT" == true ]]; then
         # HEAD, fall back to plain text.
         branch_link=""
         if [[ "$branch" != "detached" && -n "$gh_path" ]]; then
-            branch_link="https://github.com/${gh_path}/tree/${branch}"
+            branch_link="https://${gh_host}/${gh_path}/tree/${branch}"
         fi
 
         if [[ -n "$branch_link" ]]; then
@@ -475,7 +483,7 @@ render_pr_right() {
     local pr_label
     pr_label="${ORANGE}PR #${pr_number}${RESET}"
     if [[ -n "$repo_owner" && -n "$repo_name" ]]; then
-        pr_label=$(osc8_link "https://github.com/${repo_owner}/${repo_name}/pull/${pr_number}" "$pr_label")
+        pr_label=$(osc8_link "https://${gh_host}/${repo_owner}/${repo_name}/pull/${pr_number}" "$pr_label")
     fi
     right="$pr_label"
 
