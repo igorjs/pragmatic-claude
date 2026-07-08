@@ -10,6 +10,7 @@
 !/LICENSE
 !/Brewfile
 !/install.sh
+!/uninstall.sh
 !/Makefile
 !/prompts/
 # settings.json is intentionally NOT tracked: it is the owner's live, personal
