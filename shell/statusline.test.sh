@@ -43,6 +43,17 @@ assert_eq "fmt_age 90 (minutes)"       "$(fmt_age 90)"    '1m'
 assert_eq "fmt_age 3660 (1h 1m)"       "$(fmt_age 3660)"  '1h1m'
 assert_eq "fmt_age 7200 (exact hours)" "$(fmt_age 7200)"  '2h'
 
+# ── fmt_ago ──────────────────────────────────────────────────────────────────
+# Coarse "N ago" ladder: whole minutes < 1h, whole hours < 1d, whole days else.
+# These pin the exact pre-refactor ladder outputs so the dedupe is provably
+# behavior-preserving.
+assert_eq "fmt_ago 0 (0m)"        "$(fmt_ago 0)"      '0m'
+assert_eq "fmt_ago 1800 (30m)"    "$(fmt_ago 1800)"   '30m'
+assert_eq "fmt_ago 3600 (1h)"     "$(fmt_ago 3600)"   '1h'
+assert_eq "fmt_ago 7200 (2h)"     "$(fmt_ago 7200)"   '2h'
+assert_eq "fmt_ago 86400 (1d)"    "$(fmt_ago 86400)"  '1d'
+assert_eq "fmt_ago 172800 (2d)"   "$(fmt_ago 172800)" '2d'
+
 # ── cache_hit_pct ─────────────────────────────────────────────────────────────
 # Empty when no cache activity (total=0).
 assert_eq "cache_hit_pct 0 0 (empty)"      "$(cache_hit_pct 0 0)"    ''

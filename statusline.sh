@@ -119,6 +119,14 @@ fmt_age() {
     fi
 }
 
+# Coarse age for the "N ago" displays: whole minutes, then hours, then days.
+fmt_ago() {
+    local s="${1:-0}"
+    if   [[ "$s" -lt 3600  ]]; then printf '%dm' "$((s / 60))"
+    elif [[ "$s" -lt 86400 ]]; then printf '%dh' "$((s / 3600))"
+    else printf '%dd' "$((s / 86400))"; fi
+}
+
 # Cache hit ratio as integer percent: read / (read + write). Empty if no cache
 # activity yet. High ratio = warm cache = cheap turns. Low ratio = paying full
 # input price each turn.
@@ -515,9 +523,7 @@ render_pr_right() {
                 state_epoch=$(iso_to_epoch "$pr_merged_at")
                 if [[ -n "$state_epoch" ]]; then
                     diff_s=$(( $(date +%s) - state_epoch ))
-                    if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
-                    elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
-                    else state_ago="$((diff_s / 86400))d ago"; fi
+                    state_ago="$(fmt_ago "$diff_s") ago"
                     right="${right} ${DIM}(${state_ago})${RESET}"
                 fi
             fi
@@ -528,9 +534,7 @@ render_pr_right() {
                 state_epoch=$(iso_to_epoch "$pr_closed_at")
                 if [[ -n "$state_epoch" ]]; then
                     diff_s=$(( $(date +%s) - state_epoch ))
-                    if [[ $diff_s -lt 3600 ]]; then state_ago="$((diff_s / 60))m ago"
-                    elif [[ $diff_s -lt 86400 ]]; then state_ago="$((diff_s / 3600))h ago"
-                    else state_ago="$((diff_s / 86400))d ago"; fi
+                    state_ago="$(fmt_ago "$diff_s") ago"
                     right="${right} ${DIM}(${state_ago})${RESET}"
                 fi
             fi
@@ -561,13 +565,7 @@ render_pr_right() {
                 review_epoch=$(iso_to_epoch "$local_ts")
                 if [[ -n "$review_epoch" ]]; then
                     diff_s=$(( now_epoch - review_epoch ))
-                    if [[ $diff_s -lt 3600 ]]; then
-                        local_ago="$((diff_s / 60))m"
-                    elif [[ $diff_s -lt 86400 ]]; then
-                        local_ago="$((diff_s / 3600))h"
-                    else
-                        local_ago="$((diff_s / 86400))d"
-                    fi
+                    local_ago="$(fmt_ago "$diff_s")"
                 fi
             fi
             case "$local_color" in
