@@ -81,6 +81,158 @@ run_scenario "C: absolute WORKTREE_BASE_DIR override"     scenario_absolute
 run_scenario "D: repo-name grouping avoids collisions"    scenario_grouping
 run_scenario "E: '.' base guarded to default"             scenario_dot_guard
 
+# ── WU-4: smoke tests ─────────────────────────────────────────────────────────
+
+# F: Branch classification – assert the protected-branch case patterns directly.
+# Exact patterns from worktree.zsh:378 (more than the spec listed):
+#   main|master|trunk|develop|dev|staging|release|release/*|hotfix|hotfix/*
+scenario_branch_classification() {
+  local branch result ok=1
+  local CASE_SNIPPET='
+    b="$1"
+    case "$b" in
+      main|master|trunk|develop|dev|staging|release|release/*|hotfix|hotfix/*) print protected ;;
+      *) print feature ;;
+    esac
+  '
+  for branch in main master trunk develop dev staging release "release/1.2" hotfix "hotfix/x"; do
+    result="$(zsh -c "$CASE_SNIPPET" _ "$branch")"
+    if [[ "$result" != "protected" ]]; then
+      echo "  branch '$branch': expected 'protected', got '$result'"
+      ok=0
+    fi
+  done
+  for branch in "feature/foo" mybranch; do
+    result="$(zsh -c "$CASE_SNIPPET" _ "$branch")"
+    if [[ "$result" != "feature" ]]; then
+      echo "  branch '$branch': expected 'feature', got '$result'"
+      ok=0
+    fi
+  done
+  (( ok ))
+}
+
+# G: _wt_restore_stash pops the stash when STASH_APPLIED=1, is a no-op when 0.
+# Env vars confirmed from worktree.zsh:212-215: STASH_APPLIED, MAIN_WORKTREE.
+scenario_restore_stash() {
+  local repo ok=1
+  repo="$(mktemp -d)"
+
+  git -C "$repo" init -q
+  git -C "$repo" config user.email "t@t"
+  git -C "$repo" config user.name "t"
+  printf 'initial\n' > "$repo/file.txt"
+  git -C "$repo" add file.txt
+  git -C "$repo" commit -q -m "initial"
+
+  # Sub-case 1: STASH_APPLIED=1 -> _wt_restore_stash must pop the stash
+  printf 'dirty\n' > "$repo/file.txt"
+  git -C "$repo" stash push --quiet -m "test stash"
+
+  local content
+  content="$(cat "$repo/file.txt")"
+  if [[ "$content" != "initial" ]]; then
+    echo "  pre-condition: stash push did not restore working tree (got '$content')"
+    ok=0
+  fi
+
+  # shellcheck disable=SC2016
+  zsh -c '
+    source "$1"
+    STASH_APPLIED=1
+    MAIN_WORKTREE="$2"
+    _wt_restore_stash
+  ' _ "$ENGINE" "$repo"
+
+  content="$(cat "$repo/file.txt")"
+  if [[ "$content" != "dirty" ]]; then
+    echo "  sub-case 1 (STASH_APPLIED=1): expected 'dirty' after pop, got '$content'"
+    ok=0
+  fi
+
+  # Sub-case 2: STASH_APPLIED=0 -> no-op; stash list must be unchanged
+  git -C "$repo" stash push --quiet -m "another stash"
+  local before after
+  before="$(git -C "$repo" stash list | wc -l | tr -d '[:space:]')"
+
+  # shellcheck disable=SC2016
+  zsh -c '
+    source "$1"
+    STASH_APPLIED=0
+    MAIN_WORKTREE="$2"
+    _wt_restore_stash
+  ' _ "$ENGINE" "$repo"
+
+  after="$(git -C "$repo" stash list | wc -l | tr -d '[:space:]')"
+  if [[ "$before" != "$after" ]]; then
+    echo "  sub-case 2 (STASH_APPLIED=0): stash count changed ($before -> $after); should be no-op"
+    ok=0
+  fi
+
+  rm -rf "$repo"
+  (( ok ))
+}
+
+# H: _wt_find_env_base across four cases.
+# The function reads $REPO_ROOT as a global (confirmed worktree.zsh:103-115).
+# Calling convention: _wt_find_env_base [arg] where arg is optional.
+scenario_find_env_base() {
+  local repo ok=1
+  repo="$(mktemp -d)"
+
+  git -C "$repo" init -q
+
+  # (a) REPO_ROOT/.env exists, no arg -> returns "."
+  touch "$repo/.env"
+  local got
+  # shellcheck disable=SC2016
+  got="$(zsh -c 'source "$1"; REPO_ROOT="$2"; _wt_find_env_base' _ "$ENGINE" "$repo")"
+  if [[ "$got" != "." ]]; then
+    echo "  (a) REPO_ROOT/.env exists, no arg: expected '.', got '$got'"
+    ok=0
+  fi
+  rm "$repo/.env"
+
+  # (b) exactly one nested sub/.env, no arg -> returns subdir name
+  mkdir -p "$repo/apps"
+  touch "$repo/apps/.env"
+  # shellcheck disable=SC2016
+  got="$(zsh -c 'source "$1"; REPO_ROOT="$2"; _wt_find_env_base' _ "$ENGINE" "$repo")"
+  if [[ "$got" != "apps" ]]; then
+    echo "  (b) nested apps/.env, no arg: expected 'apps', got '$got'"
+    ok=0
+  fi
+  rm "$repo/apps/.env"
+  rmdir "$repo/apps"
+
+  # (c) explicit valid arg "myenv" with REPO_ROOT/myenv/.env -> returns "myenv"
+  mkdir -p "$repo/myenv"
+  touch "$repo/myenv/.env"
+  # shellcheck disable=SC2016
+  got="$(zsh -c 'source "$1"; REPO_ROOT="$2"; _wt_find_env_base "$3"' _ "$ENGINE" "$repo" "myenv")"
+  if [[ "$got" != "myenv" ]]; then
+    echo "  (c) explicit arg 'myenv': expected 'myenv', got '$got'"
+    ok=0
+  fi
+  rm "$repo/myenv/.env"
+  rmdir "$repo/myenv"
+
+  # (d) no .env anywhere, no arg -> returns ""
+  # shellcheck disable=SC2016
+  got="$(zsh -c 'source "$1"; REPO_ROOT="$2"; _wt_find_env_base' _ "$ENGINE" "$repo")"
+  if [[ "$got" != "" ]]; then
+    echo "  (d) no .env, no arg: expected '', got '$got'"
+    ok=0
+  fi
+
+  rm -rf "$repo"
+  (( ok ))
+}
+
+run_scenario "F: branch classification (protected vs feature)"  scenario_branch_classification
+run_scenario "G: _wt_restore_stash stash-pop and no-op"        scenario_restore_stash
+run_scenario "H: _wt_find_env_base four cases"                 scenario_find_env_base
+
 TOTAL=$(( PASS + FAIL ))
 echo ""
 echo "${PASS}/${TOTAL} scenarios passed"
