@@ -84,17 +84,25 @@ resolve_tarball_url() {
     fi
 }
 
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# PRAGMATIC_CLAUDE_SRC is a test seam: when set, install straight from a local
+# checkout and skip the network path (resolve/curl/tar) entirely.
+SRC="${PRAGMATIC_CLAUDE_SRC:-}"
+if [ -n "$SRC" ]; then
+    [ -d "$SRC" ] || die "PRAGMATIC_CLAUDE_SRC is not a directory: $SRC"
+    log "Installing from local source $SRC"
+else
+    TMP="$(mktemp -d)"
+    trap 'rm -rf "$TMP"' EXIT
 
-url="$(resolve_tarball_url)"
-log "Downloading $url"
-curl -fsSL "$url" -o "$TMP/config.tar.gz" || die "download failed: $url"
-tar -xzf "$TMP/config.tar.gz" -C "$TMP" || die "could not extract archive"
+    url="$(resolve_tarball_url)"
+    log "Downloading $url"
+    curl -fsSL "$url" -o "$TMP/config.tar.gz" || die "download failed: $url"
+    tar -xzf "$TMP/config.tar.gz" -C "$TMP" || die "could not extract archive"
 
-SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '*pragmatic-claude*' | head -1)"
-[ -n "$SRC" ] || SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)"
-[ -d "$SRC" ] || die "could not locate extracted source directory"
+    SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '*pragmatic-claude*' | head -1)"
+    [ -n "$SRC" ] || SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)"
+    [ -d "$SRC" ] || die "could not locate extracted source directory"
+fi
 
 mkdir -p "$CLAUDE_HOME"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -107,6 +115,7 @@ for src in "$SRC"/*; do
     name="$(basename "$src")"
     case "$name" in
         .git|.github|.DS_Store) continue ;;
+        settings.json) continue ;;  # never clobber a user's live settings
     esac
     dest="$CLAUDE_HOME/$name"
     if [ -e "$dest" ]; then
@@ -118,6 +127,15 @@ for src in "$SRC"/*; do
     cp -R "$src" "$dest"
 done
 shopt -u dotglob nullglob
+
+# Seed a default settings.json from the shared template on first install only.
+# The copy loop never ships settings.json (see skip case), so a live user file
+# is always left untouched; this fills the default in when none exists yet. If
+# the template is absent, do nothing and continue.
+if [ ! -e "$CLAUDE_HOME/settings.json" ] && [ -f "$CLAUDE_HOME/settings.shared.json" ]; then
+    cp "$CLAUDE_HOME/settings.shared.json" "$CLAUDE_HOME/settings.json"
+    log "Seeded default settings.json from settings.shared.json"
+fi
 
 # --- setup -----------------------------------------------------------------
 
