@@ -31,6 +31,8 @@ PRAGMATIC_CLAUDE_REF=v0.1.0 curl -fsSL https://raw.githubusercontent.com/igorjs/
 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash -s -- --no-setup
 ```
 
+Pin `PRAGMATIC_CLAUDE_REF` to a tag or commit for a reproducible, reviewable install: the same files every run, and a ref you inspect first.
+
 Prefer git? Clone fresh:
 
 ```bash
@@ -132,6 +134,14 @@ A single `graph.json` covers every fact, global and project, and rebuilds automa
 ## Notes
 
 Config edits (`settings.json` or hooks) take effect on a fresh session only. After changing them, run `cc fresh` or plain `claude`. `cc` warns you when a resumed session runs on stale config. The repo tracks config files, not runtime state. The allowlist `.gitignore` keeps sessions, caches, plugin manifests, and credentials out of git.
+
+## Security
+
+The shipped install seed (`settings.shared.json`) carries a conservative permissions default. It drops bare `Bash` and the keychain `security` commands from auto-allow. It moves twelve interpreters (`node`, `python3`, `npx`, `npm`, `make`, `awk`, `go`, `source`, `xargs`, `sqlite3`, `psql`, `docker`) from allow to ask, so the installer gets prompted. This closes the obvious `node -e` and `python3 -c` one-liners.
+
+It's not a sandbox. Some commands still run without a prompt: `git`, `gh`, `find -exec`, the `sed` e-command, and anything under `Bash(**/.claude/**)`. The split lowers the default prompt surface, nothing more.
+
+Autoupdates ship disabled through `DISABLE_AUTOUPDATER` in the env block. To turn them back on, remove that variable or set it to `0`.
 
 ## License
 
