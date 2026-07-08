@@ -10,6 +10,7 @@
 !/LICENSE
 !/Brewfile
 !/install.sh
+!/Makefile
 !/prompts/
 !/settings.json
 !/permissions.shared.json
