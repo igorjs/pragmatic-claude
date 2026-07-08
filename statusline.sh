@@ -245,6 +245,7 @@ is_workspace_project() {
 
 # Ensure cache dir exists with restrictive perms. chmod runs only on first creation
 # so the user can loosen perms later without us silently resetting them.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 if [[ ! -d "$CACHE_DIR" ]]; then
     mkdir -p "$CACHE_DIR" 2>/dev/null && chmod 700 "$CACHE_DIR" 2>/dev/null
 fi
@@ -781,3 +782,4 @@ for seg in \
 done
 [[ -n "$line_2" ]] && printf '%b\n' "$line_2"
 exit 0
+fi
