@@ -233,6 +233,353 @@ run_scenario "F: branch classification (protected vs feature)"  scenario_branch_
 run_scenario "G: _wt_restore_stash stash-pop and no-op"        scenario_restore_stash
 run_scenario "H: _wt_find_env_base four cases"                 scenario_find_env_base
 
+# ── WU-1/2/3 tests ────────────────────────────────────────────────────────────
+
+# I: _wt_ai_resolve_decision – full matrix (pure, no repo needed)
+scenario_ai_resolve_decision() {
+  local ok=1
+
+  decision() {
+    # shellcheck disable=SC2016
+    zsh -c 'source "$1"; _wt_ai_resolve_decision "$2" "$3" "$4"' \
+      _ "$ENGINE" "$1" "$2" "$3"
+  }
+
+  check() {
+    local label="$1" got want="$2"
+    shift 2
+    got="$(decision "$@")"
+    if [[ "$got" != "$want" ]]; then
+      echo "  decision($*): expected '$want', got '$got' [$label]"
+      ok=0
+    fi
+  }
+
+  # silent=1 -> always spawn regardless of tty or answer
+  check "silent=1,tty=0,ans=''"  spawn  1 0 ""
+  check "silent=1,tty=1,ans=n"   spawn  1 1 "n"
+
+  # silent=0, is_tty=1 -> interactive path
+  check "silent=0,tty=1,ans=''"    spawn  0 1 ""
+  check "silent=0,tty=1,ans=y"     spawn  0 1 "y"
+  check "silent=0,tty=1,ans=Y"     spawn  0 1 "Y"
+  check "silent=0,tty=1,ans=yes"   spawn  0 1 "yes"
+  check "silent=0,tty=1,ans=Yes"   spawn  0 1 "Yes"
+  check "silent=0,tty=1,ans=YES"   spawn  0 1 "YES"
+  check "silent=0,tty=1,ans=n"     abort  0 1 "n"
+  check "silent=0,tty=1,ans=junk"  abort  0 1 "junk"
+
+  # silent=0, is_tty=0 -> non-interactive, always abort
+  check "silent=0,tty=0,ans=''"    abort  0 0 ""
+
+  (( ok ))
+}
+
+# J: _wt_ai_resolve_info – info block mentions branch, base, files, git add, git rebase --continue
+scenario_ai_resolve_info() {
+  local ok=1
+  # shellcheck disable=SC2016
+  local stderr
+  stderr="$(zsh -c '
+    source "$1"
+    _wt_ai_resolve_info "branchX" "origin/main" "a.txt b.txt"
+  ' _ "$ENGINE" 2>&1 >/dev/null)"
+
+  for needle in "branchX" "origin/main" "a.txt b.txt" "git add" "git rebase --continue"; do
+    if [[ "$stderr" != *"$needle"* ]]; then
+      echo "  info block missing: '$needle'"
+      ok=0
+    fi
+  done
+
+  (( ok ))
+}
+
+# K: _wt_setup_upstream with NO_PUSH
+scenario_no_push() {
+  local repo bare ok=1
+  repo="$(mktemp -d)"
+  bare="$(mktemp -d)"
+
+  # Initialise a bare "origin"
+  git -C "$bare" init --bare -q
+
+  # Initialise a working repo and point it at the bare remote
+  git -C "$repo" init -q
+  git -C "$repo" config user.email "t@t"
+  git -C "$repo" config user.name "t"
+  printf 'init\n' > "$repo/f.txt"
+  git -C "$repo" add f.txt
+  git -C "$repo" commit -q -m "init"
+  git -C "$repo" remote add origin "file://$bare"
+  git -C "$repo" push -u origin master --quiet 2>/dev/null \
+    || git -C "$repo" push -u origin main --quiet 2>/dev/null || true
+
+  # Create a local feature branch (not pushed)
+  git -C "$repo" checkout -q -b feat/test-no-push
+
+  # Sub-case 1: NO_PUSH=1 -> bare origin must NOT get the branch
+  # shellcheck disable=SC2016
+  zsh -c '
+    source "$1"
+    cd "$2" || exit 1
+    REMOTE=origin BRANCH=feat/test-no-push NO_PUSH=1
+    _wt_setup_upstream
+  ' _ "$ENGINE" "$repo"
+
+  local ref_count
+  ref_count="$(git -C "$bare" show-ref --heads 2>/dev/null | grep -c "feat/test-no-push" || true)"
+  if [[ "$ref_count" != "0" ]]; then
+    echo "  sub-case 1 (NO_PUSH=1): branch was pushed despite --no-push (count=$ref_count)"
+    ok=0
+  fi
+
+  # Sub-case 2: NO_PUSH=0 -> bare origin MUST get the branch
+  # shellcheck disable=SC2016
+  zsh -c '
+    source "$1"
+    cd "$2" || exit 1
+    REMOTE=origin BRANCH=feat/test-no-push NO_PUSH=0
+    _wt_setup_upstream
+  ' _ "$ENGINE" "$repo"
+
+  ref_count="$(git -C "$bare" show-ref --heads 2>/dev/null | grep -c "feat/test-no-push" || true)"
+  if [[ "$ref_count" == "0" ]]; then
+    echo "  sub-case 2 (NO_PUSH=0): branch was NOT pushed (expected push)"
+    ok=0
+  fi
+
+  rm -rf "$repo" "$bare"
+  (( ok ))
+}
+
+# L: _wt_node_modules – CoW clone, independence, no nesting, npm invoked
+scenario_cow_node_modules() {
+  local base wt npm_shim ok=1
+  base="$(mktemp -d)"
+  wt="$(mktemp -d)"
+  npm_shim="$(mktemp -d)"
+
+  # npm shim records invocation
+  printf '#!/bin/sh\necho npm-called >> "%s/npm.log"\n' "$npm_shim" > "$npm_shim/npm"
+  chmod +x "$npm_shim/npm"
+
+  # Initialise base as a git repo with matching lockfile + node_modules
+  git -C "$base" init -q
+  git -C "$base" config user.email "t@t"
+  git -C "$base" config user.name "t"
+  printf '{"name":"x","version":"1.0.0"}\n'  > "$base/package.json"
+  printf 'lockfile-content\n'                 > "$base/package-lock.json"
+  mkdir -p "$base/node_modules"
+  printf 'base-marker\n'                      > "$base/node_modules/marker"
+  git -C "$base" add .
+  git -C "$base" commit -q -m "init"
+
+  # Initialise wt (the "worktree") with matching lockfile
+  git -C "$wt" init -q
+  git -C "$wt" config user.email "t@t"
+  git -C "$wt" config user.name "t"
+  cp "$base/package.json"      "$wt/package.json"
+  cp "$base/package-lock.json" "$wt/package-lock.json"
+  git -C "$wt" add .
+  git -C "$wt" commit -q -m "init"
+
+  # Run _wt_node_modules from within wt
+  # shellcheck disable=SC2016
+  PATH="$npm_shim:$PATH" zsh -c '
+    source "$1"
+    cd "$2" || exit 1
+    REPO_ROOT="$3"
+    _wt_node_modules
+  ' _ "$ENGINE" "$wt" "$base"
+
+  # (a) node_modules/marker must exist in the worktree
+  if [[ ! -f "$wt/node_modules/marker" ]]; then
+    echo "  (a) node_modules/marker missing in worktree"
+    ok=0
+  fi
+
+  # (b) no node_modules/node_modules nesting
+  if [[ -d "$wt/node_modules/node_modules" ]]; then
+    echo "  (b) node_modules/node_modules nesting detected"
+    ok=0
+  fi
+
+  # (c) overwrite wt copy; base must be UNCHANGED (independent copy)
+  printf 'wt-changed\n' > "$wt/node_modules/marker"
+  local base_content
+  base_content="$(cat "$base/node_modules/marker")"
+  if [[ "$base_content" != "base-marker" ]]; then
+    echo "  (c) base repo's node_modules/marker was altered (got '$base_content'); not independent"
+    ok=0
+  fi
+
+  # (d) npm shim was invoked
+  if [[ ! -f "$npm_shim/npm.log" ]]; then
+    echo "  (d) npm was not called"
+    ok=0
+  fi
+
+  # (e) lockfile mismatch -> early return (no clone)
+  local wt2
+  wt2="$(mktemp -d)"
+  git -C "$wt2" init -q
+  git -C "$wt2" config user.email "t@t"
+  git -C "$wt2" config user.name "t"
+  cp "$base/package.json" "$wt2/package.json"
+  printf 'different-lock\n' > "$wt2/package-lock.json"
+  git -C "$wt2" add .
+  git -C "$wt2" commit -q -m "init"
+
+  # shellcheck disable=SC2016
+  PATH="$npm_shim:$PATH" zsh -c '
+    source "$1"
+    cd "$2" || exit 1
+    REPO_ROOT="$3"
+    _wt_node_modules
+  ' _ "$ENGINE" "$wt2" "$base"
+
+  if [[ -d "$wt2/node_modules" ]]; then
+    echo "  (e) lockfile mismatch: node_modules was cloned despite mismatch"
+    ok=0
+  fi
+
+  rm -rf "$base" "$wt" "$wt2" "$npm_shim"
+  (( ok ))
+}
+
+# M: Integration – _wt_maybe_rebase with rebase conflict
+# WORKTREE_AI_RESOLVE_SILENT=1 -> claude shim invoked (sentinel created)
+# stdin not a tty + silent unset -> shim NOT invoked, rebase aborted
+scenario_maybe_rebase_conflict() {
+  local ok=1
+
+  # Helper: build a repo with a rebase conflict.
+  # Returns the base-branch name on stdout.
+  make_conflict_repo() {
+    local repo="$1" bare="$2"
+
+    git -C "$bare" init --bare -q
+
+    git -C "$repo" init -q
+    git -C "$repo" config user.email "test@t"
+    git -C "$repo" config user.name "Test User"
+    printf 'line1\n' > "$repo/f.txt"
+    git -C "$repo" add f.txt
+    git -C "$repo" commit -q -m "init"
+    git -C "$repo" remote add origin "file://$bare"
+
+    local base_branch
+    base_branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
+    git -C "$repo" push -u origin "$base_branch" --quiet
+
+    git -C "$repo" checkout -q -b my-feat
+    printf 'feat-change\n' > "$repo/f.txt"
+    git -C "$repo" commit -q -am "feat commit"
+
+    git -C "$repo" checkout -q "$base_branch"
+    printf 'base-change\n' > "$repo/f.txt"
+    git -C "$repo" commit -q -am "base conflict commit"
+    git -C "$repo" push origin "$base_branch" --quiet
+
+    git -C "$repo" checkout -q my-feat
+
+    printf '%s\n' "$base_branch"
+  }
+
+  # ── Sub-case 1: WORKTREE_AI_RESOLVE_SILENT=1 → shim invoked ──────────────
+  local repo1 bare1 claude_shim sentinel base_ref1
+  repo1="$(mktemp -d)"
+  bare1="$(mktemp -d)"
+  claude_shim="$(mktemp -d)"
+  sentinel="$claude_shim/sentinel"
+
+  base_ref1="$(make_conflict_repo "$repo1" "$bare1")"
+
+  # claude shim: record call via sentinel; exit 0.
+  # Set PATH inside the zsh script to guarantee the shim wins over any
+  # system-installed claude binary (macOS path_helper can prepend /usr/local/bin
+  # after the env-prefix PATH, so we set it explicitly inside zsh instead).
+  cat > "$claude_shim/claude" <<'EOF'
+#!/bin/sh
+touch "$SENTINEL"
+exit 0
+EOF
+  chmod +x "$claude_shim/claude"
+
+  # Pass claude_shim as positional $3, sentinel path via env SENTINEL.
+  # shellcheck disable=SC2016
+  SENTINEL="$sentinel" WORKTREE_AI_RESOLVE_SILENT=1 \
+    zsh -c '
+      PATH="$3:$PATH"
+      source "$1"
+      cd "$2" || exit 1
+      REMOTE=origin BASE_REF="$4" AI_RESOLVE=1 BRANCH=my-feat
+      _wt_maybe_rebase
+    ' _ "$ENGINE" "$repo1" "$claude_shim" "$base_ref1" 2>/dev/null
+
+  if [[ ! -f "$sentinel" ]]; then
+    echo "  sub-case 1 (SILENT=1): claude shim was NOT invoked (sentinel missing)"
+    ok=0
+  fi
+
+  # ── Sub-case 2: no tty + silent unset → rebase aborted, shim NOT invoked ──
+  local repo2 bare2 claude_shim2 sentinel2 base_ref2
+  repo2="$(mktemp -d)"
+  bare2="$(mktemp -d)"
+  claude_shim2="$(mktemp -d)"
+  sentinel2="$claude_shim2/sentinel2"
+
+  base_ref2="$(make_conflict_repo "$repo2" "$bare2")"
+
+  cat > "$claude_shim2/claude" <<'EOF'
+#!/bin/sh
+touch "$SENTINEL2"
+exit 0
+EOF
+  chmod +x "$claude_shim2/claude"
+
+  local pre_tip
+  pre_tip="$(git -C "$repo2" rev-parse my-feat)"
+
+  # stdin is not a tty (bash test script); WORKTREE_AI_RESOLVE_SILENT unset.
+  # shellcheck disable=SC2016
+  SENTINEL2="$sentinel2" \
+    zsh -c '
+      PATH="$3:$PATH"
+      source "$1"
+      cd "$2" || exit 1
+      REMOTE=origin BASE_REF="$4" AI_RESOLVE=1 BRANCH=my-feat
+      _wt_maybe_rebase
+    ' _ "$ENGINE" "$repo2" "$claude_shim2" "$base_ref2" </dev/null 2>/dev/null
+
+  if [[ -f "$sentinel2" ]]; then
+    echo "  sub-case 2 (no tty): claude shim WAS invoked (should have aborted)"
+    ok=0
+  fi
+
+  if [[ -d "$repo2/.git/rebase-merge" ]]; then
+    echo "  sub-case 2: .git/rebase-merge still exists (rebase not aborted)"
+    ok=0
+  fi
+
+  local post_tip
+  post_tip="$(git -C "$repo2" rev-parse my-feat)"
+  if [[ "$pre_tip" != "$post_tip" ]]; then
+    echo "  sub-case 2: branch tip changed ($pre_tip -> $post_tip); rebase was not fully aborted"
+    ok=0
+  fi
+
+  rm -rf "$repo1" "$bare1" "$claude_shim" "$repo2" "$bare2" "$claude_shim2"
+  (( ok ))
+}
+
+run_scenario "I: _wt_ai_resolve_decision matrix"               scenario_ai_resolve_decision
+run_scenario "J: _wt_ai_resolve_info output"                   scenario_ai_resolve_info
+run_scenario "K: _wt_setup_upstream --no-push"                 scenario_no_push
+run_scenario "L: _wt_node_modules CoW clone"                   scenario_cow_node_modules
+run_scenario "M: _wt_maybe_rebase conflict (integration)"      scenario_maybe_rebase_conflict
+
 TOTAL=$(( PASS + FAIL ))
 echo ""
 echo "${PASS}/${TOTAL} scenarios passed"

@@ -19,7 +19,36 @@
 # Flags: --ai-resolve (or WORKTREE_AI_RESOLVE=1) lets Claude resolve rebase
 # conflicts; otherwise a conflict just aborts the rebase.
 
+# Default prompt sent to claude when auto-resolving rebase conflicts.
+# Override before sourcing: _WT_AI_RESOLVE_PROMPT="your prompt"
+: ${_WT_AI_RESOLVE_PROMPT:="Resolve the current git rebase conflicts. Run 'git diff --name-only --diff-filter=U' to find conflicted files, read each, fix the markers, 'git add' them, then 'git rebase --continue'. Keep both sides where intent is clear; if ambiguous, prefer the incoming (origin/\$BASE_REF) version."}
+
 _wt_die() { print -u2 -- "worktree: $1"; return "${2:-1}"; }
+
+# Decide the conflict action once AI-resolve is on and claude is available.
+# $1 silent(0/1)  $2 is_tty(0/1)  $3 answer(raw read)  ->  spawn|abort
+_wt_ai_resolve_decision() {
+    (( $1 )) && { print -- spawn; return; }
+    if (( $2 )); then
+        case "$3" in ""|[Yy]|[Yy][Ee][Ss]) print -- spawn ;; *) print -- abort ;; esac
+    else
+        print -- abort
+    fi
+}
+
+# Print an info block (to stderr) describing what auto-resolve will do.
+# $1 branch  $2 base (e.g. origin/main)  $3 conflicted file list
+_wt_ai_resolve_info() {
+    local branch="$1" base="$2" files="$3"
+    print -u2 -- "--- worktree: rebase conflict ---"
+    print -u2 -- "  Branch : $branch"
+    print -u2 -- "  Base   : $base"
+    print -u2 -- "  Files  : $files"
+    print -u2 -- "Auto-resolve will: spawn 'claude -p --model haiku', read each conflicted"
+    print -u2 -- "  file, fix markers, run 'git add', then 'git rebase --continue'."
+    print -u2 -- "  When ambiguous, prefer origin/<base> (incoming) version."
+    print -u2 -- "---------------------------------"
+}
 
 _wt_help() {
     print -- 'cc worktree <branch> [env-base-folder]   (also ccd worktree)'
@@ -27,6 +56,8 @@ _wt_help() {
     print -- '  Folder name is the JIRA key in the branch, else the branch leaf.'
     print -- '  Worktrees live in <repo-parent>/<base>/<repo>/<folder> (base = WORKTREE_BASE_DIR, default .worktrees).'
     print -- '  Claude auto-resolves rebase conflicts on your own branches (WORKTREE_AI_RESOLVE=0 disables).'
+    print -- '  --no-push   Skip auto-creating the remote branch (env: WORKTREE_NO_PUSH=1).'
+    print -- '              Run "git push -u <remote> <branch>" manually when ready.'
 }
 
 # md5 (macOS) | md5sum (Linux) -> short stable hash of a string
@@ -94,6 +125,8 @@ _wt_setup_upstream() {
     [[ "$current" == "$expected" ]] && return 0
     if git ls-remote --heads "$REMOTE" "$BRANCH" | grep -q .; then
         git branch --set-upstream-to="$expected" "$BRANCH" >/dev/null 2>&1 || true
+    elif (( NO_PUSH )); then
+        return 0
     else
         git push -u "$REMOTE" "$BRANCH" || _wt_die "failed to create upstream" 6
     fi
@@ -151,13 +184,10 @@ _wt_node_modules() {
     [[ "$base_hash" != "$here_hash" ]] && return 0
 
     [[ -e "node_modules" ]] && rm -rf "node_modules"
-    if command -v rsync >/dev/null; then
-        rsync -a --delete --link-dest="$REPO_ROOT/node_modules" "$REPO_ROOT/node_modules/" "node_modules/" 2>/dev/null \
-          || rsync -a --delete "$REPO_ROOT/node_modules/" "node_modules/"
-    else
-        cp -al "$REPO_ROOT/node_modules" "node_modules" 2>/dev/null || cp -R "$REPO_ROOT/node_modules" "node_modules"
-    fi
-    print -u2 -- "Reused node_modules via hardlinks"
+    cp -cR "$REPO_ROOT/node_modules" "node_modules" 2>/dev/null \
+      || { rm -rf "node_modules"; cp -R --reflink=auto "$REPO_ROOT/node_modules" "node_modules" 2>/dev/null; } \
+      || { rm -rf "node_modules"; cp -R "$REPO_ROOT/node_modules" "node_modules"; }
+    print -u2 -- "Cloned node_modules (copy-on-write)"
     command -v npm >/dev/null && { npm install --prefer-offline --no-audit --no-fund >&2 2>&1 || true; }
 }
 
@@ -329,6 +359,7 @@ _wt_main() {
     _wt_maybe_rebase
 
     local worktree_dir; worktree_dir="$(pwd)"
+    (( NO_PUSH )) && print -u2 -- "worktree: --no-push set; will not auto-create the remote branch. Run 'git push -u $REMOTE $BRANCH' when ready."
     print -u2 -- "Ready: $worktree_dir"
 
     # Background: full fetch, upstream, sync, housekeeping, cleanup
@@ -393,9 +424,20 @@ _wt_maybe_rebase() {
 
     if ! git rebase "${rebase_args[@]}" 2>/dev/null; then
         if (( AI_RESOLVE )) && command -v claude >/dev/null 2>&1; then
-            print -u2 -- "Rebase conflict on $current_branch. Asking Claude (haiku) to resolve..."
-            command claude -p --model haiku "Resolve the current git rebase conflicts. Run 'git diff --name-only --diff-filter=U' to find conflicted files, read each, fix the markers, 'git add' them, then 'git rebase --continue'. Keep both sides where intent is clear; if ambiguous, prefer the incoming (origin/$BASE_REF) version." 2>/dev/null \
-              || { print -u2 -- "Auto-resolve failed. Aborting rebase."; git rebase --abort 2>/dev/null || true; }
+            local conflicted; conflicted="$(git diff --name-only --diff-filter=U 2>/dev/null)"
+            _wt_ai_resolve_info "$current_branch" "$REMOTE/$BASE_REF" "$conflicted"
+            local silent=0 is_tty=0 answer=""
+            [[ -n "${WORKTREE_AI_RESOLVE_SILENT:-}" && "$WORKTREE_AI_RESOLVE_SILENT" != "0" ]] && silent=1
+            [[ -t 0 ]] && is_tty=1
+            if (( ! silent && is_tty )); then
+                print -n -u2 -- "Run auto-resolve now? [Y/n] "
+                read -r answer
+            fi
+            case "$(_wt_ai_resolve_decision "$silent" "$is_tty" "$answer")" in
+                spawn) command claude -p --model haiku "$_WT_AI_RESOLVE_PROMPT" 2>/dev/null \
+                         || { print -u2 -- "Auto-resolve failed. Aborting rebase."; git rebase --abort 2>/dev/null || true; } ;;
+                abort) print -u2 -- "Skipped auto-resolve. Aborting rebase; re-run with the branch checked out to retry."; git rebase --abort 2>/dev/null || true ;;
+            esac
         else
             print -u2 -- "Rebase conflict on $current_branch onto $REMOTE/$BASE_REF. Aborting (pass --ai-resolve to let Claude fix it)."
             git rebase --abort 2>/dev/null || true
@@ -416,7 +458,7 @@ _cc_worktree() {
     emulate -L zsh 2>/dev/null || true
     setopt local_options no_nomatch 2>/dev/null || true
 
-    local REMOTE="origin" BRANCH="" ENV_BASE_ARG="" AI_RESOLVE=0
+    local REMOTE="origin" BRANCH="" ENV_BASE_ARG="" AI_RESOLVE=0 NO_PUSH=0
     local REPO_ROOT REPO_PARENT WT_ROOT MAIN_WORKTREE BASE_REF JIRA_KEY FOLDER TARGET ENV_BASE FETCH_CACHE
     local STASH_APPLIED=0 _wt_origin="$PWD" rc=0
 
@@ -424,6 +466,7 @@ _cc_worktree() {
     for a in "$@"; do
         case "$a" in
             --ai-resolve) AI_RESOLVE=1 ;;
+            --no-push)    NO_PUSH=1 ;;
             -h|--help)    _wt_help; return 0 ;;
             --)           ;;
             -*)           _wt_die "unknown option: $a" 2; return $? ;;
@@ -436,6 +479,8 @@ _cc_worktree() {
     if [[ -n "${WORKTREE_AI_RESOLVE:-}" ]]; then
         if [[ "$WORKTREE_AI_RESOLVE" == "0" ]]; then AI_RESOLVE=0; else AI_RESOLVE=1; fi
     fi
+    # WORKTREE_NO_PUSH mirrors the --no-push flag via the environment.
+    [[ -n "${WORKTREE_NO_PUSH:-}" && "$WORKTREE_NO_PUSH" != "0" ]] && NO_PUSH=1
 
     print -u2 -- "worktree: setting up '$BRANCH'..."
     { _wt_main; rc=$? } always { _wt_restore_stash; (( rc )) && cd "$_wt_origin" 2>/dev/null }
