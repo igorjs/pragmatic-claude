@@ -12,6 +12,7 @@
 !/install.sh
 !/prompts/
 !/settings.json
+!/permissions.shared.json
 !/statusline.sh
 !/commands/
 !/skills/
@@ -44,3 +45,4 @@ __pycache__/
 .DS_Store
 *.bak
 *~
+.claude/plans/
