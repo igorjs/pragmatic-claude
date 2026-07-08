@@ -131,6 +131,26 @@ A single `graph.json` covers every fact, global and project, and rebuilds automa
 - `statusline.sh`: statusline (git branch, PR/CI status, token usage).
 - `output-styles/`: custom output styles.
 
+## Uninstall
+
+```bash
+bash ~/.claude/uninstall.sh
+```
+
+This removes every shipped file from `~/.claude` and strips the `cc.zsh` source line from `~/.zshrc`. It backs up `.zshrc` before editing.
+
+**Preserved by default:** `settings.json`, `.settings.base.json`, `backups/`, and all runtime state (`sessions/`, `projects/`, `history*`, `plugins/`, `memory/`, `plans/`, `runtime/`, `cache/`, `logs/`, `todos/`, `shell-snapshots/`, `.credentials*`, `cc-state/`, `ccd-state/`).
+
+Pass `--purge` to also remove `settings.json`, `.settings.base.json`, and `backups/`.
+
+**Flags:**
+
+- `--yes`: skip the confirmation prompt.
+- `--force`: bypass the git-repo guard (see below).
+- `--purge`: remove user config in addition to shipped files.
+
+**Git-repo guard:** if `~/.claude` is a git working tree, the script refuses to run. Raw `rm` leaves index entries dangling; the correct path for decommissioning is `git rm -r <entries>`. Pass `--force` to bypass this guard if you know what you're doing. `--force` bypasses only the git guard; it doesn't skip the confirmation prompt.
+
 ## Notes
 
 Config edits (`settings.json` or hooks) take effect on a fresh session only. After changing them, run `cc fresh` or plain `claude`. `cc` warns you when a resumed session runs on stale config. The repo tracks config files, not runtime state. The allowlist `.gitignore` keeps sessions, caches, plugin manifests, and credentials out of git.
