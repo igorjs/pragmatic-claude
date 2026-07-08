@@ -119,3 +119,20 @@ emit_system_message() {
   local msg="$1"
   jq -cn --arg msg "$msg" '{ systemMessage: $msg }'
 }
+
+# Atomically increment the integer in $1 (dir-lock, temp-file swap).
+# Sets $_INCR_RESULT to the new value; also usable for its file side effect alone.
+_incr_counter() {
+  local file="$1"
+  local lock="${file}.lock"
+  local i=0
+  until mkdir "$lock" 2>/dev/null || [ "$i" -ge 50 ]; do
+    sleep 0.01; i=$((i+1))
+  done
+  local n
+  n="$(cat "$file" 2>/dev/null || echo 0)"
+  n=$((n + 1))
+  printf '%s' "$n" > "${file}.tmp.$$" && mv "${file}.tmp.$$" "$file"
+  rmdir "$lock" 2>/dev/null
+  _INCR_RESULT="$n"
+}
