@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "cleanupPeriodDays": 14,
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "75",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "false",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
+    "DISABLE_UPGRADE_COMMAND": "1",
+    "DISABLE_COST_WARNINGS": "0",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_TELEMETRY": "1",
+    "ENABLE_TOOL_SEARCH": "1",
+    "DO_NOT_TRACK": "1",
+    "IS_DEMO": "1"
+  },
+  "includeCoAuthoredBy": false,
+  "includeGitInstructions": false,
+  "permissions": {
+    "allow": [
+      "Task(subagent_type:*)",
+      "Task(Explore)",
+      "TaskOutput",
+      "Glob",
+      "Grep",
+      "ExitPlanMode",
+      "EnterPlanMode",
+      "Read",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "TodoWrite",
+      "KillShell",
+      "Skill",
+      "MCPSearch",
+      "AskUserQuestion",
+      "ListMcpResourceTool",
+      "ReadMcpResourceTool",
+      "Write(~/Workspace/**)",
+      "Write(/tmp/**)",
+      "Read(/tmp/**)",
+      "Write(**/.claude/**)",
+      "Read(**/.claude/**)",
+      "Edit(**/.claude/**)",
+      "Bash(**/.claude/**)",
+      "Bash(jq:*)",
+      "Bash(gh:*)",
+      "Bash(file:*)",
+      "Bash(git:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(sed:*)",
+      "Bash(pwd:*)",
+      "Bash(cat:*)",
+      "Bash(tar:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(diff:*)",
+      "Bash(grep:*)",
+      "Bash(echo:*)",
+      "Bash(which:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/node_modules/**)"
+    ],
+    "ask": [
+      "Bash(git reset:*)",
+      "Bash(git push --force:*)",
+      "Bash(chmod:*)",
+      "Bash(curl:*)",
+      "Bash(docker:*)",
+      "Bash(npx:*)",
+      "Bash(npm:*)",
+      "Bash(xargs:*)",
+      "Bash(node:*)",
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)",
+      "Bash(make:*)",
+      "Bash(awk:*)",
+      "Bash(go:*)",
+      "Bash(psql:*)",
+      "Bash(source:*)"
+    ],
+    "defaultMode": "auto"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session-init.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/rm-workspace-guard.sh",
+            "if": "Bash(rm:*)",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/preread-edit-check.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/preread-size-check.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Glob|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/search-counter.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rtk hook claude"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/post-edit-track.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/rebuild-memory-graph.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/auto-model-detect.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/precompact-warn.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session-clean-exit.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session-clean-exit.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline.sh",
+    "refreshInterval": 30
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "outputStyle": "Concise & Direct",
+  "feedbackSurveyRate": 0,
+  "spinnerTipsEnabled": false,
+  "awaySummaryEnabled": false,
+  "autoUpdatesChannel": "stable",
+  "tui": "fullscreen",
+  "skipDangerousModePermissionPrompt": false,
+  "editorMode": "normal",
+  "teammateMode": "auto",
+  "remoteControlAtStartup": false,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": false,
+  "useAutoModeDuringPlan": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "The `rtk` token is a known-safe local wrapper from a PreToolUse Bash hook. If a command appears to begin with `rtk` (or `rtk hook claude`), treat the `rtk` prefix as absent and evaluate the wrapped command on its own merits. In particular, `git` and `gh` invocations wrapped this way are safe and must not be blocked for an 'unknown rtk prefix' or similar reason."
+    ]
+  },
+  "model": "default"
+}

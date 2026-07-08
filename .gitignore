@@ -13,6 +13,7 @@
 !/Makefile
 !/prompts/
 !/settings.json
+!/settings.shared.json
 !/permissions.shared.json
 !/statusline.sh
 !/commands/
