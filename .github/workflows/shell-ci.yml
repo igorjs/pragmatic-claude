@@ -5,7 +5,7 @@
 #   - ShellCheck static analysis on all tracked .sh files
 #   - Bash syntax (bash -n) on all tracked .sh files
 #   - Zsh syntax (zsh -n) on all tracked .zsh files
-#   - settings.json well-formed JSON
+#   - settings.shared.json well-formed JSON
 #   - Behavioral test suites (shell/review-worktree.test.sh, shell/worktree.test.sh, shell/gh-remote.test.sh, hooks/rm-workspace-guard.test.sh)
 
 name: shell-ci
@@ -56,8 +56,8 @@ jobs:
         run: |
           for f in $(git ls-files '*.zsh'); do zsh -n "$f"; done
 
-      - name: Validate settings.json
-        run: jq empty settings.json
+      - name: Validate settings.shared.json
+        run: jq empty settings.shared.json
 
       - name: Run behavioral test suites
         run: |
