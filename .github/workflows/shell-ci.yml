@@ -75,3 +75,4 @@ jobs:
           bash shell/install-seed.test.sh
           bash shell/check-shared-settings.test.sh
           bash shell/check-manifest.test.sh
+          bash shell/merge-settings.test.sh

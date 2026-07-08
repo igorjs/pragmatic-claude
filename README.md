@@ -135,6 +135,18 @@ A single `graph.json` covers every fact, global and project, and rebuilds automa
 
 Config edits (`settings.json` or hooks) take effect on a fresh session only. After changing them, run `cc fresh` or plain `claude`. `cc` warns you when a resumed session runs on stale config. The repo tracks config files, not runtime state. The allowlist `.gitignore` keeps sessions, caches, plugin manifests, and credentials out of git.
 
+## Settings merge
+
+Each `install.sh` run merges the shipped template into your `settings.json` rather than overwriting it. New product config lands automatically; keys you've customised stay as you set them.
+
+The merge tracks a baseline in `~/.claude/.settings.base.json`. On each install it compares that baseline against the new template and your live file to decide which keys to update and which to leave alone.
+
+After each install, check `backups/install-<stamp>/settings-merge-skipped.json`. It lists every key the new template tried to change but your customisation took precedence. Entries look like `{"key":"...", "template_had":..., "yours":...}`. Review them and decide whether to adopt the template value manually.
+
+`permissions` is a single top-level key. If you've customised it (for example, added rules to `permissions.deny`), the whole `permissions` block is treated as contested and the template's version is withheld. Your custom rules take precedence. The skip file will show the entry so you can compare and merge manually if the template shipped new deny rules you want.
+
+If an install is interrupted after writing `settings.json` but before writing the baseline, the files are out of sync. Delete `~/.claude/.settings.base.json` to reset. The next install treats the missing baseline as an empty object and falls back to additive mode: all your keys are kept and new template keys are added.
+
 ## Security
 
 The shipped install seed (`settings.shared.json`) carries a conservative permissions default. It drops bare `Bash` and the keychain `security` commands from auto-allow. It moves twelve interpreters (`node`, `python3`, `npx`, `npm`, `make`, `awk`, `go`, `source`, `xargs`, `sqlite3`, `psql`, `docker`) from allow to ask, so the installer gets prompted. This closes the obvious `node -e` and `python3 -c` one-liners.
