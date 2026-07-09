@@ -10,8 +10,14 @@
 !/LICENSE
 !/Brewfile
 !/install.sh
+!/uninstall.sh
+!/Makefile
 !/prompts/
-!/settings.json
+# settings.json is intentionally NOT tracked: it is the owner's live, personal
+# config. The shipped install seed is the generated settings.shared.json below.
+# Warning: `git clean -x` inside ~/.claude will delete the untracked settings.json.
+!/settings.shared.json
+!/permissions.shared.json
 !/statusline.sh
 !/commands/
 !/skills/
@@ -44,3 +50,4 @@ __pycache__/
 .DS_Store
 *.bak
 *~
+.claude/plans/

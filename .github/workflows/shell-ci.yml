@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# CI gate for the repo's own shell code. Validates:
-#   - ShellCheck static analysis on all tracked .sh files
+# CI gate for the repo's own shell code. Runs on ubuntu-latest and macos-latest
+# so the BSD code paths (date -j, stat -f, cp -c, md5) execute too. Validates:
+#   - ShellCheck static analysis on all tracked .sh files (Linux only, lint once)
 #   - Bash syntax (bash -n) on all tracked .sh files
 #   - Zsh syntax (zsh -n) on all tracked .zsh files
-#   - settings.json well-formed JSON
-#   - Behavioral test suites (shell/review-worktree.test.sh, shell/worktree.test.sh, shell/gh-remote.test.sh, hooks/rm-workspace-guard.test.sh)
+#   - Shared settings template shape (shell/check-shared-settings.sh)
+#   - Tracked-file allowlist, no leaked runtime state (shell/check-manifest.sh)
+#   - Every behavioral suite discovered via `git ls-files '*.test.sh'`
 
 name: shell-ci
 
@@ -23,11 +25,17 @@ concurrency:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
       - uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        # Linux-only action; it self-skips on macOS with a confusing warning.
+        if: runner.os == 'Linux'
         with:
           # Kept on audit (not block) — apt-get pulls from Ubuntu archive
           # mirrors that rotate per runner placement (azure.archive.ubuntu.com,
@@ -40,12 +48,17 @@ jobs:
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install shellcheck and zsh
-        run: sudo apt-get update && sudo apt-get install -y shellcheck zsh
+      - name: Install shellcheck, zsh, and jq
+        # macOS runners ship zsh and jq; only Linux needs the apt install.
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y shellcheck zsh jq
 
       - name: ShellCheck (.sh files)
+        # Lint once, on Linux only: shellcheck is not preinstalled on macOS
+        # runners and static analysis is platform-independent.
         # --severity=warning: baseline is clean with 2 minor style hints;
         # can be tightened to --severity=style once those are addressed.
+        if: runner.os == 'Linux'
         run: git ls-files '*.sh' | xargs shellcheck --severity=warning
 
       - name: Bash syntax check
@@ -56,14 +69,18 @@ jobs:
         run: |
           for f in $(git ls-files '*.zsh'); do zsh -n "$f"; done
 
-      - name: Validate settings.json
-        run: jq empty settings.json
+      - name: Validate shared settings and tracked-file manifest
+        run: |
+          bash shell/check-shared-settings.sh settings.shared.json permissions.shared.json .
+          bash shell/check-manifest.sh
 
       - name: Run behavioral test suites
+        # Discover every suite so a new *.test.sh is picked up automatically.
+        # The git identity is needed by the worktree suites, which commit.
         run: |
           git config user.email "ci@github.local"
           git config user.name "CI"
-          bash shell/review-worktree.test.sh
-          bash shell/worktree.test.sh
-          bash shell/gh-remote.test.sh
-          bash hooks/rm-workspace-guard.test.sh
+          for f in $(git ls-files '*.test.sh'); do
+            echo "== $f"
+            bash "$f" || exit 1
+          done

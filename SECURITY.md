@@ -29,12 +29,7 @@ If the report is declined (not a vulnerability, or out of scope), you will recei
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| `v0.3.0` (latest) | Yes |
-| earlier | No |
-
-Only the latest released version (`v0.3.0`) receives security patches. Upgrade to the latest version before reporting.
+Security fixes target [the latest released version](https://github.com/igorjs/pragmatic-claude/releases). Earlier versions don't receive patches. Upgrade to the latest release before reporting.
 
 ## Scope
 
