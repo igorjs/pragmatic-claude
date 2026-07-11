@@ -185,8 +185,8 @@ On a **ledger-driven resume** (Step 5 ledger, e.g. after `/clear`, a crash, or a
 
 1. Pick the last WU that keeps the Segment at or under budget; call its commit `<split-sha>`.
 2. `git branch <type>/<plan-slug>-s<N>b-<seg-slug> HEAD` to save the excess commits, then `git reset --hard <split-sha>` on the current Segment branch to drop them from it.
-3. The new `s<N>b` Segment branches off the trimmed current Segment (its `<segment-base>` is `<split-sha>`; under **independent** it still branches off the default branch); its PR targets the current Segment's branch under stacked, the default branch under independent, or the shared branch under single. The `b` suffix avoids colliding with a planned `s<N+1>`.
-4. Note the re-split (new Segment id, split point) in the ledger and the final report.
+3. The new `s<N>b` Segment branches off the trimmed current Segment (its `<segment-base>` is `<split-sha>`; under **independent** it still branches off the default branch); its PR targets the current Segment's branch under stacked, the default branch under independent, or the current Segment's (shared) branch under single. The `b` suffix avoids colliding with a planned `s<N+1>`. **Under single topology this means the re-split adds one follow-up PR** stacked on the shared branch: single still ships one PR normally, but the 1500 hard limit is never breached, so an overflowing single plan yields the shared-branch PR plus one follow-up.
+4. **Deliver `s<N>b` as the very next Segment**, before any pre-planned `s<N+1>`, then continue the outer loop. Note the re-split (new Segment id, split point) in the ledger and the final report.
 
 The plan's Segments are the starting point; reality wins at the budget.
 
@@ -319,7 +319,7 @@ Each lens returns severity-classified findings with `file:line` evidence and a f
 
 - **Stacked:** for each Segment **in order**, `/create-pull-request --base <prev-Segment-branch>` on its branch (Segment 1 uses the default branch). Opening in order matters: `/create-pull-request` pushes the current branch, so each Segment's branch is on origin by the time the next Segment names it as `--base`. This yields the stacked chain (PR #1 targets the default branch, PR #2 targets Segment 1's branch, and so on). Record each PR URL in the ledger.
 - **Independent:** `/create-pull-request` per Segment branch with the default branch as base.
-- **Single:** in `--auto`, one `/create-pull-request` for the whole branch; interactively, leave PR creation to the user (the pre-existing behaviour).
+- **Single:** in `--auto`, one `/create-pull-request` for the whole branch; interactively, leave PR creation to the user (the pre-existing behaviour). If a hard-limit re-split fired (Step 5), the plan now has a shared branch plus one `s<N>b` follow-up branch: open both (follow-up `--base` the shared branch), or in interactive mode point the user at both.
 
 **Boundary behaviour.** With **savepoint** (the default, and `--auto`), open the whole PR set here at the end. With **pause after each PR**, Step 9 has already run per Segment (its scoped review before the PR), so this step opens that one Segment's PR and stops for the user before the next Segment.
 
