@@ -1,5 +1,5 @@
 ---
-description: Interview-driven planning session with deep requirements gathering that produces a verified implementation plan.
+description: Interview-driven planning session with deep requirements gathering that produces a verified implementation plan, its Work Units grouped into suggested PR-sized Segments.
 allowed-tools: Bash, Read, Grep, Glob, Write, Task, Skill
 argument-hint: "[topic | ./prompt.md | .claude/designs/*.md] [--auto] [--help]"
 model: opus
@@ -40,8 +40,9 @@ Asks one question at a time with a recommended answer. Explores the codebase
 and the memory store (`~/.claude/memory/` for global facts, `~/.claude/memory/<owner>/<repo>/` for project facts, `<owner>/<repo>` derived from the git remote) when it exists to answer
 questions itself before asking you. Memory is optional: when neither store is present, it relies on the codebase alone. Walks decision trees, runs a 3-phase
 quality gate, and produces a verified, self-contained plan broken into small
-Work Units (some flagged parallel-safe) that you can run with /implement (or
-the superpowers:executing-plans skill).
+Work Units (some flagged parallel-safe), grouped into ordered PR-sized Segments
+(one concern each, one PR each) that you can run with /implement (or the
+superpowers:executing-plans skill).
 ```
 
 ## Core Rules (MUST)
@@ -180,14 +181,23 @@ Produce a self-contained plan that `/implement` (or the `superpowers:executing-p
 | path/to/file.ts | modify | [what changes and why] |
 | path/to/new.ts  | create | [what it does] |
 
+### Segments (suggested PRs)
+Ordered, PR-sized groups of Work Units. One concern each; each Segment becomes one pull request.
+`/implement` honors these but may re-split a Segment whose real diff exceeds the 1000-line budget.
+| Seg | Title | Work Units | Requires | Concern | Est. lines |
+|-----|-------|-----------|----------|---------|-----------|
+| S1 | [title] | WU-0, WU-1, WU-2 | none | [schema + types] | ~180 |
+| S2 | [title] | WU-3 | S1 | [wire-up] | ~90 |
+
 ### Deliverables (Work Units)
-Smallest independently-committable units, in dependency order. One WU = one small commit.
-| WU | Title | Files | Requires | Parallel group | Done When |
-|----|-------|-------|----------|----------------|-----------|
-| WU-0 | [title] | path/to/types.ts | none | none | [observable acceptance] |
-| WU-1 | [title] | path/to/a.ts, path/to/a.test.ts | WU-0 | P1 | ... |
-| WU-2 | [title] | path/to/b.ts, path/to/b.test.ts | WU-0 | P1 | ... |
-| WU-3 | [title] | path/to/index.ts | WU-1, WU-2 | none | ... |
+Smallest independently-committable units, in dependency order. One WU = one small commit. Each WU
+belongs to exactly one Segment.
+| WU | Title | Files | Requires | Segment | Parallel group | Done When |
+|----|-------|-------|----------|---------|----------------|-----------|
+| WU-0 | [title] | path/to/types.ts | none | S1 | none | [observable acceptance] |
+| WU-1 | [title] | path/to/a.ts, path/to/a.test.ts | WU-0 | S1 | P1 | ... |
+| WU-2 | [title] | path/to/b.ts, path/to/b.test.ts | WU-0 | S1 | P1 | ... |
+| WU-3 | [title] | path/to/index.ts | WU-1, WU-2 | S2 | none | ... |
 
 ### Parallel Groups
 - **P1** (after WU-0): WU-1 and WU-2. Disjoint files, no shared state, safe to run concurrently by separate agents.
@@ -216,7 +226,14 @@ For each WU, in dependency order:
 
 The Testing Strategy MUST follow the `engineering-standards` skill (test types, isolation, TDD red/green/refactor, no coverage decrease).
 
-**Work Unit sizing (MUST).** Each WU is one coherent commit: small enough to review on its own, following the `engineering-standards` size limits and incremental-delivery guidance. Prefer more, smaller WUs over a few large ones; `/implement` commits each separately. The `Files` column lists production and test files. The `Requires` column is the dependency edge `/implement` topologically orders and cycle-checks.
+**Work Unit sizing (MUST).** Each WU is one coherent commit: small enough to review on its own, following the `engineering-standards` size limits and incremental-delivery guidance. Prefer more, smaller WUs over a few large ones; `/implement` commits each separately. The `Files` column lists production and test files. The `Requires` column is the dependency edge `/implement` topologically orders and cycle-checks. The `Segment` column names the PR-sized group each WU belongs to (see below).
+
+**Segment sizing (MUST).** A Segment groups Work Units into one PR-sized, reviewable increment. Each Segment becomes one pull request, so:
+1. **One concern per Segment.** Data layer, service layer, wire-up, and docs are separate Segments, not one, per `engineering-standards` "one concern per PR".
+2. **Budget.** Target under 500 changed lines per Segment; never plan a Segment estimated over 1000 (split it first). `/implement` re-splits at the 1000-line budget if reality exceeds the estimate.
+3. **Ordering respects WU dependencies.** A Segment's WUs may only `Require` WUs in the same or an earlier Segment; no forward cross-Segment dependency. Default to a **linear** Segment chain (`S1 -> S2 -> S3`), which `/implement` maps to stacked PRs.
+4. **Coverage.** Every WU belongs to exactly one Segment; no WU is left out and none appears in two.
+5. **Suggestions, not law.** These are `/implement`'s starting point; note in the plan that it may re-split a Segment whose real diff blows the budget. Mark two Segments as parallel-safe only when their file sets are disjoint and neither `Requires` the other.
 
 **Parallel-safety (MUST mark explicitly).** Assign a shared `Parallel group` label only when every member of the group:
 1. has no dependency on another member (none appears in another's `Requires`),
@@ -239,6 +256,7 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the full plan and the
 - Downstream consumers of changed code are identified.
 - The test infrastructure the plan assumes actually exists.
 - The Work Unit dependency graph is acyclic, and each Parallel group's WUs have disjoint files with no dependency on each other (the parallel-safe flags are accurate).
+- **Segments are well-formed:** every WU maps to exactly one Segment (full coverage, no WU in two); Segment order respects WU `Requires` (no forward cross-Segment dependency); each Segment's estimate is within budget (FAIL if a planned Segment exceeds 1000 changed lines, WARN if it exceeds 500); any parallel-marked Segments have disjoint files and no mutual `Requires`.
 
 Returns a structured PASS / FAIL / WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
 
