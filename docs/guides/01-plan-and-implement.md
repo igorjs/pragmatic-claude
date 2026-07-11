@@ -71,8 +71,8 @@ With no arguments, it lists saved plans to pick from. If the reference isn't a r
 
 **Delivery strategy (asked up front).** Before executing, `/implement` settles how to deliver the Segments and recommends an option based on the plan's scope. It asks two things (unless you preset them with `--pr-strategy` / `--boundary`, or run `--auto`, which self-selects the recommended options and records them as assumptions):
 
-- **PR topology:** stacked (default; each Segment branches off the previous, PR N targets Segment N-1), independent off the default branch (when Segments are disjoint), sequential merge-gated (open the first PR, resume after it merges), or a single PR (tiny plans).
-- **Segment boundary:** savepoint commits with the PRs opened at the end (default), pause after each PR, or auto-chain a PR as each Segment completes.
+- **PR topology:** stacked (default; each Segment branches off the previous, PR N targets Segment N-1), independent off the default branch (when Segments are disjoint), or a single PR (tiny plans).
+- **Segment boundary:** savepoint commits with the PRs opened at the end (default), or pause after each PR. Savepoint keeps every Segment branch local until the end, so the refinement pass can rebase the stack locally and each PR opens with a first push (no force-push); pause runs the review per Segment and opens that Segment's PR before moving on.
 
 **Execution order.** `/implement` executes one Segment at a time in dependency order, each on its own branch. Within a Segment, Work Units run in dependency order; when a parallel group's dependencies are all done, `/implement` verifies the file sets are disjoint, then dispatches the group as concurrent Sonnet Tasks in one message. After a Segment's Work Units land, it checks the real diff against the 1000-line budget and re-splits the Segment if it overflowed.
 
@@ -88,7 +88,7 @@ Pass `--no-tdd` to write tests and implementation together instead.
 
 **After all Segments.** `/implement` runs a refinement pass: a self quick-review plus a SOLID/DRY/KISS/YAGNI simplify analysis, folded into refinement Work Units and executed autonomously. Then an adversarial subagent reviews the full diff. Blocking findings get fixed, routed onto the Segment branch that owns the touched file (the stack is rebased in order), and re-validated. Non-blocking ones become follow-ups.
 
-**Then the PRs open.** `/implement` opens one small pull request per Segment via `/create-pull-request`, following the chosen topology, stacked PRs target the previous Segment's branch, and each PR body carries that Segment's concern and follow-ups.
+**Then the PRs open.** `/implement` opens one small pull request per Segment via `/create-pull-request`, following the chosen topology, stacked PRs target the previous Segment's branch, and each PR body carries that Segment's concern and follow-ups. The one exception is a single-topology plan in interactive mode, where PR creation is left to you (the pre-existing behaviour); `--auto` opens it for you.
 
 ### Autonomous mode (--auto)
 
