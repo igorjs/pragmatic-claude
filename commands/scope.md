@@ -183,7 +183,7 @@ Produce a self-contained plan that `/implement` (or the `superpowers:executing-p
 
 ### Segments (suggested PRs)
 Ordered, PR-sized groups of Work Units. One concern each; each Segment becomes one pull request.
-`/implement` honors these but may re-split a Segment whose real diff exceeds the 1000-line budget.
+`/implement` honors these but may re-split a Segment whose real diff exceeds the 1500-line hard limit.
 | Seg | Title | Work Units | Requires | Concern | Est. lines |
 |-----|-------|-----------|----------|---------|-----------|
 | S1 | [title] | WU-0, WU-1, WU-2 | none | [schema + types] | ~180 |
@@ -230,7 +230,7 @@ The Testing Strategy MUST follow the `engineering-standards` skill (test types, 
 
 **Segment sizing (MUST).** A Segment groups Work Units into one PR-sized, reviewable increment. Each Segment becomes one pull request, so:
 1. **One concern per Segment.** Data layer, service layer, wire-up, and docs are separate Segments, not one, per `engineering-standards` "one concern per PR".
-2. **Budget.** Target under 500 changed lines per Segment; never plan a Segment estimated over 1000 (split it first). `/implement` re-splits at the 1000-line budget if reality exceeds the estimate.
+2. **Budget (three tiers, from `engineering-standards`).** Target under 500 changed lines per Segment (soft). A Segment estimated over 1000 (enforced) needs explicit justification in the plan; prefer to split it. Never plan a Segment estimated over 1500 (hard). `/implement` re-splits at the 1500 hard limit if reality exceeds the estimate.
 3. **Ordering respects WU dependencies.** A Segment's WUs may only `Require` WUs in the same or an earlier Segment; no forward cross-Segment dependency. Default to a **linear** Segment chain (`S1 -> S2 -> S3`), which `/implement` maps to stacked PRs.
 4. **Coverage.** Every WU belongs to exactly one Segment; no WU is left out and none appears in two.
 5. **Suggestions, not law.** These are `/implement`'s starting point; note in the plan that it may re-split a Segment whose real diff blows the budget. Mark two Segments as parallel-safe only when their file sets are disjoint and neither `Requires` the other.
@@ -256,7 +256,7 @@ Spawn an **Explore** agent (`subagent_type: Explore`) with the full plan and the
 - Downstream consumers of changed code are identified.
 - The test infrastructure the plan assumes actually exists.
 - The Work Unit dependency graph is acyclic, and each Parallel group's WUs have disjoint files with no dependency on each other (the parallel-safe flags are accurate).
-- **Segments are well-formed:** every WU maps to exactly one Segment (full coverage, no WU in two); Segment order respects WU `Requires` (no forward cross-Segment dependency); each Segment's estimate is within budget (FAIL if a planned Segment exceeds 1000 changed lines, WARN if it exceeds 500); any parallel-marked Segments have disjoint files and no mutual `Requires`.
+- **Segments are well-formed:** every WU maps to exactly one Segment (full coverage, no WU in two); Segment order respects WU `Requires` (no forward cross-Segment dependency); each Segment's estimate is within budget (FAIL if a planned Segment exceeds the 1500 hard limit, WARN if it exceeds 1000 without justification or exceeds the 500 soft limit); any parallel-marked Segments have disjoint files and no mutual `Requires`.
 
 Returns a structured PASS / FAIL / WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
 

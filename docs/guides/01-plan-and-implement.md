@@ -43,7 +43,7 @@ Above the Work Units, `/scope` groups them into ordered **Segments**: PR-sized i
 | Seg | Title | Work Units | Requires | Concern | Est. lines |
 ```
 
-A Segment targets under 500 changed lines and is never planned above 1000, following `engineering-standards` ("one concern per PR", "ship a sequence of small PRs"). Segments are ordered so a Segment's Work Units only depend on the same or earlier Segments; the default is a linear chain, which maps to stacked PRs. These are suggestions: `/implement` honors them but re-splits any Segment whose real diff exceeds 1000 lines. The quality gate's fact-check phase validates that every Work Unit maps to exactly one Segment, the ordering respects dependencies, and no Segment is over budget.
+A Segment targets under 500 changed lines (a Segment over 1000 needs justification, and none may exceed the 1500 hard limit), following `engineering-standards` ("one concern per PR", "ship a sequence of small PRs"). Segments are ordered so a Segment's Work Units only depend on the same or earlier Segments; the default is a linear chain, which maps to stacked PRs. These are suggestions: `/implement` honors them but re-splits any Segment whose real diff exceeds the 1500 hard limit. The quality gate's fact-check phase validates that every Work Unit maps to exactly one Segment, the ordering respects dependencies, and no Segment is over budget.
 
 ### Autonomous mode (--auto)
 
@@ -74,7 +74,7 @@ With no arguments, it lists saved plans to pick from. If the reference isn't a r
 - **PR topology:** stacked (default; each Segment branches off the previous, PR N targets Segment N-1), independent off the default branch (when Segments are disjoint), or a single PR (tiny plans).
 - **Segment boundary:** savepoint commits with the PRs opened at the end (default), or pause after each PR. Savepoint keeps every Segment branch local until the end, so the refinement pass can rebase the stack locally and each PR opens with a first push (no force-push); pause runs the review per Segment and opens that Segment's PR before moving on.
 
-**Execution order.** `/implement` executes one Segment at a time in dependency order, each on its own branch. Within a Segment, Work Units run in dependency order; when a parallel group's dependencies are all done, `/implement` verifies the file sets are disjoint, then dispatches the group as concurrent Sonnet Tasks in one message. After a Segment's Work Units land, it checks the real diff against the 1000-line budget and re-splits the Segment if it overflowed.
+**Execution order.** `/implement` executes one Segment at a time in dependency order, each on its own branch. Within a Segment, Work Units run in dependency order; when a parallel group's dependencies are all done, `/implement` verifies the file sets are disjoint, then dispatches the group as concurrent Sonnet Tasks in one message. After a Segment's Work Units land, it checks the real diff against the 1500-line hard limit and re-splits the Segment if it overflowed.
 
 **TDD by default.** Each Work Unit cycles through red/green/refactor:
 

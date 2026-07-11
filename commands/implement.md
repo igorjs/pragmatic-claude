@@ -50,8 +50,9 @@ DELIVERY: /implement splits the plan into PR-sized Segments and, before
 executing, asks two things (unless preset by flag or running --auto):
   - PR topology: stacked (default) | independent | single
   - Boundary:    savepoint (default) | pause
-It honors the plan's Segments but re-splits any whose real diff exceeds 1000
-changed lines. Each Segment becomes one small pull request.
+It honors the plan's Segments but re-splits any whose real diff exceeds the
+1500-line hard limit (Segments target under 500). Each Segment becomes one small
+pull request.
 
 PLANNING: /implement never designs. If the reference isn't a ready plan, it
 stops and tells you to run /scope or /adr first.
@@ -136,7 +137,7 @@ Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the u
 **1. Resolve Segments.**
 
 - If the plan has a **Segments** table (a `/scope` plan does), use it: each Segment is an ordered group of Work Units, and the WU table's `Segment` column assigns every WU.
-- If it does NOT (an older plan, an issue, or a spec), **derive** Segments here: pack the Work Units into groups under the 1000-line budget, in dependency order, one concern per group where the WU titles make the boundary obvious. A tiny plan may be a single Segment.
+- If it does NOT (an older plan, an issue, or a spec), **derive** Segments here: pack the Work Units into groups targeting under 500 changed lines (never over the 1500 hard limit), in dependency order, one concern per group where the WU titles make the boundary obvious. A tiny plan may be a single Segment.
 
 Either way, confirm the Segment ordering respects the WU `Requires` graph (no forward cross-Segment dependency) before continuing; reorder if needed.
 
@@ -180,7 +181,7 @@ When SOLID's abstraction pulls against KISS/YAGNI, favour the simplest thing tha
 
 On a **ledger-driven resume** (Step 5 ledger, e.g. after `/clear`, a crash, or a fresh checkout), the previous Segment's branch may not exist locally: `git fetch origin <prev-Segment-branch>` (or confirm the ref exists) before branching off it. Record `Segment id -> branch -> <segment-base> -> WU commit range` in the ledger as you go.
 
-**Re-split guard (MUST, budget = 1000 changed lines).** After a Segment's WUs are committed, measure its real diff against its base: `git diff --shortstat <segment-base>...HEAD`. If changed lines exceed 1000, split the Segment at WU boundaries, in git:
+**Re-split guard (MUST, hard limit = 1500 changed lines; Segments target under 500).** After a Segment's WUs are committed, measure its real diff against its base: `git diff --shortstat <segment-base>...HEAD`. If changed lines exceed 1500, split the Segment at WU boundaries, in git:
 
 1. Pick the last WU that keeps the Segment at or under budget; call its commit `<split-sha>`.
 2. `git branch <type>/<plan-slug>-s<N>b-<seg-slug> HEAD` to save the excess commits, then `git reset --hard <split-sha>` on the current Segment branch to drop them from it.
@@ -338,8 +339,8 @@ Each lens returns severity-classified findings with `file:line` evidence and a f
 | `--auto`: validation fails after 3 fixes (including Step 8/9 re-validations) | Stop; report; do NOT open any PRs |
 | `--auto`: on the default branch | Create a feature branch before the first commit |
 | `--auto`: commit/push fails | Stop; report (auth, hooks, etc.) |
-| Plan has no Segments (old plan/issue/spec) | Derive Segments under the 1000-line budget in Step 4.5 |
-| Segment's real diff exceeds 1000 changed lines | Re-split at WU boundaries into a new trailing Segment/PR; note it (Step 5) |
+| Plan has no Segments (old plan/issue/spec) | Derive Segments targeting under 500 lines (never over 1500) in Step 4.5 |
+| Segment's real diff exceeds the 1500-line hard limit | Re-split at WU boundaries into a new trailing Segment/PR; note it (Step 5) |
 | Interactive, not `--auto`, no strategy flags | Ask the two Step 4.5 questions (topology + boundary), recommend per scope |
 | `--auto` or a strategy flag set | Skip that question; self-select recommended (stacked + savepoint) and record as assumption |
 | Pause boundary chosen | Run Steps 7-9 scoped per Segment, open its PR, stop for the user before the next (Step 9) |
