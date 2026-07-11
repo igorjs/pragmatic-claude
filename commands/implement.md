@@ -140,7 +140,7 @@ Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the u
 
 Either way, confirm the Segment ordering respects the WU `Requires` graph (no forward cross-Segment dependency) before continuing; reorder if needed.
 
-**2. Choose the delivery strategy.** In interactive mode you MUST ask (this is the "always ask before implementing" gate); present each choice with `AskUserQuestion`, recommended option first, and recommend based on the plan's scope:
+**2. Choose the delivery strategy.** In interactive mode you MUST ask the user before any code is written (this is the "always ask before implementing" gate). Do this by **calling the `AskUserQuestion` tool** with the two questions below in a single call, each option's recommended choice listed first and labelled, recommended per the plan's scope. Do NOT infer the answers, and do NOT start executing Step 5 until the user has answered. The two questions:
 
 - **PR topology:**
   - **Stacked** (default recommendation): each Segment branches off the previous one; PR N targets Segment N-1's branch. Recommend when Segments form a dependency chain (the common case).
