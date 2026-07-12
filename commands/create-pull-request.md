@@ -16,7 +16,7 @@ This creates a **new** PR. If one already exists for the branch, this stops and 
 
 Execute the steps below immediately, end to end, running every bash block for real. Do **not** narrate a plan, summarize `git status`, offer a numbered menu, or ask "what would you like me to do?" / "proceed? [Y/n]". There is **no confirmation gate**.
 
-Run end to end: auto-detect the base and ticket, draft the title and body, then push and create. Readiness problems (uncommitted work, oversize diff, no tests) print as warnings and never pause. Only the hard aborts (on the base branch, nothing ahead of base, an existing PR) stop the run.
+Run end to end: auto-detect the base and ticket, draft the title and body, then push and create. Readiness problems (uncommitted work, a diff over the soft or enforced size limit, no tests) print as warnings and never pause. Only the hard aborts (on the base branch, nothing ahead of base, an existing PR, a diff over the 1500-line hard size limit) stop the run.
 
 This command is built to run in an isolated subagent (`context: fork`) so the diff and drafting stay out of the main context. When it forks, your final message is the only thing the main conversation sees, so end with a concise outcome summary (the PR URL, title, base, and draft state). If you are instead reading this in the main conversation, run it here exactly the same way; do not wait for a fork and do not defer to the user.
 
@@ -103,17 +103,24 @@ DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
 TESTS=$(git diff --name-only "origin/$BASE_BRANCH...HEAD" | grep -ciE '(\.test\.|\.spec\.|_test\.|test_|/tests?/|/__tests__/)' || true)
 
 echo "commits_ahead=$AHEAD changed_lines=${CHANGED:-0} dirty_files=$DIRTY test_files_touched=$TESTS"
+
+# Hard stops (always end the run): nothing to PR, or over the 1500-line hard size limit.
+if [ "$AHEAD" -eq 0 ]; then
+  echo "ABORT: nothing ahead of $BASE_BRANCH; there is nothing to open a PR for"; exit 1
+fi
+if [ "${CHANGED:-0}" -gt 1500 ]; then
+  echo "ABORT: ${CHANGED} changed lines is over the 1500-line hard size limit; split the work into smaller PRs"; exit 1
+fi
 ```
 
-Evaluate against `engineering-standards`, then decide:
+Evaluate against `engineering-standards`, then decide (the two hard stops above have already exited; these are the non-blocking ones):
 
-- **`AHEAD` = 0** → abort. There is nothing to open a PR for. This is a hard error that always stops the run.
 - **`DIRTY` > 0** → print a warning: those changes are uncommitted and won't be in the PR. Continue.
-- **`CHANGED` > 1000** → print a prominent warning that it is over the hard size limit. Continue.
+- **`CHANGED` > 1000** → print a prominent warning that it is over the enforced limit and needs explicit justification. Continue.
 - **`CHANGED` > 500** → note it is above the soft limit and continue.
 - **`TESTS` = 0** → note the diff adds no tests (the readiness criteria expect tests for behaviour changes). Continue.
 
-Report the readiness picture in one short block, then continue. None of these pause for input; they print and move on.
+Report the readiness picture in one short block. The two hard stops (`AHEAD` = 0, `CHANGED` > 1500) already exited in the block above; the rest print and move on without pausing.
 
 ## Step 3: Gather the diff and commit history
 
