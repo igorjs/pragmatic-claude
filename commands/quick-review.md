@@ -54,7 +54,7 @@ Invoke the `grounding-review` skill before drafting any finding, and load the `w
 Comment bodies are read by another engineer, so they use the humane `writing-style` register (warm, contractions, constructive), NOT the terse operator voice from the "Concise & Direct" output style or system prompt `## Output`. Where those would conflict, `writing-style` wins for anything posted to GitHub. The non-negotiable points for inline comments posted to GitHub:
 
 - **Conventional Comments label + decoration on every finding, PLAIN TEXT (no bold).** Start the body with `issue (non-blocking):`, `suggestion:`, `nitpick:`. NEVER wrap in `**...**`. Per writing-style: "a human typing fast doesn't wrap labels in `**`." Valid labels: `issue`, `suggestion`, `nitpick`, `question`. Valid decorations: `(blocking)`, `(non-blocking)`.
-- **1-2 sentences for non-blocking findings.** One ideal, two max. Blocking findings MAY run longer because there's a decision to argue.
+- **Keep findings short and plain.** A simple non-blocking finding is one to two sentences. When a finding needs context, use up to three short paragraphs (what's wrong, why, the fix), each kept short, not one dense run-on. Avoid jargon; say it in plain words. Blocking findings MAY run longer because there's a decision to argue.
 - **Pick one pragmatic fix.** No "X, or Y" options. If both work, prefer the smallest diff and recommend that one.
 - **Paraphrase, don't quote.** Block-quoting the README or source code is almost always longer than restating it in your own words.
 - **Don't restate the diff or the anchor.** The author wrote the code; the comment is already on the line. Skip "this function adds X" and skip "at file:line" when the comment IS at that line.
@@ -223,7 +223,7 @@ If you catch yourself doing any of these while drafting findings, stop and rewri
 1. **Diff restatement.** "This change moves X into Y so that...". Delete the entire setup sentence and lead with the finding.
 2. **Hedging stack.** "may actually be" + "I'd lean toward" + "that said" in a single comment is a tell.
 3. **Meta-justification.** "since a non-timestamp string in a timestamp column is its own foot-gun". The recommendation is enough; trust the reader.
-4. **Bullet-list explanation inside a 2-sentence finding.** If you reach for a bulleted list inside an inline comment, the finding is too big. Split or simplify.
+4. **Bullet-list explanation inside an inline comment.** Use short prose paragraphs (up to three), not bullets, inside an inline comment. If bullets feel necessary, the finding is too big: split or simplify.
 5. **Posting findings in the review body** instead of inline.
 6. **Auto-submitting** without the two-question orchestration.
 
