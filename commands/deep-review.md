@@ -79,7 +79,7 @@ EXAMPLES:
 
 ## Voice rules
 
-Invoke the `grounding-review` and `writing-style` skills before drafting any finding (same discipline as `/quick-review`). Non-negotiables for anything posted to GitHub: Conventional Comments label + decoration in **plain text** (`issue (blocking):`, `suggestion:`, `nitpick:`, never bold); 1-2 sentences for non-blocking findings; one pragmatic fix, not a menu; no hedging; no meta-justification; no em or en dashes.
+Invoke the `grounding-review` and `writing-style` skills before drafting any finding (same discipline as `/quick-review`). Non-negotiables for anything posted to GitHub: Conventional Comments label + decoration in **plain text** (`issue (blocking):`, `suggestion:`, `nitpick:`, never bold); plain, jargon-free language; findings kept short (one to two sentences when simple, up to three short paragraphs when a finding needs context); one pragmatic fix, not a menu; no hedging; no meta-justification; no em or en dashes.
 
 ## Step 1: Resolve PR and gather context
 
@@ -194,7 +194,7 @@ Instruct each to:
 
 ```json
 {"file": "...", "line": N, "side": "RIGHT", "label": "issue", "decoration": "blocking",
- "category": "security", "confidence": "HIGH", "evidence": "<exact code>", "body": "<1-2 sentence finding>"}
+ "category": "security", "confidence": "HIGH", "evidence": "<exact code>", "body": "<short plain finding; 1-2 sentences, up to 3 short paragraphs if it needs context>"}
 ```
 
 Collect every reviewer's JSON. If a reviewer returns nothing, record it ran with zero findings (not a failure).

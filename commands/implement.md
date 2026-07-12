@@ -1,7 +1,7 @@
 ---
-description: Execute an approved plan or ADR blueprint (from /scope or /adr) on Sonnet, delegating edits to subagents and committing each unit. Then runs one refinement pass (self quick-review + SOLID/DRY/KISS/YAGNI simplify, re-planned and executed autonomously) and an adversarial review. Execute-only; it does not design new scope.
+description: Execute an approved plan or ADR blueprint (from /scope or /adr) on Sonnet, delegating edits to subagents and committing each Work Unit. Delivers the plan as PR-sized Segments (savepoint commits, one small pull request per Segment; stacked by default), asking the delivery strategy up front. Then runs one refinement pass (self quick-review + SOLID/DRY/KISS/YAGNI simplify, re-planned and executed autonomously) and an adversarial review. Execute-only; it does not design new scope.
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Task, Skill
-argument-hint: "[plan | adr-blueprint | #issue | KEY-123 | ./spec.md | text] [--auto] [--no-tdd] [--force] [--help]"
+argument-hint: "[plan | adr-blueprint | #issue | KEY-123 | ./spec.md | text] [--auto] [--no-tdd] [--force] [--pr-strategy=<stacked|independent|single>] [--boundary=<savepoint|pause>] [--help]"
 model: sonnet
 effort: xhigh
 ---
@@ -9,6 +9,8 @@ effort: xhigh
 # Implement: Execute a Verified Plan
 
 Execute an approved implementation plan or ADR blueprint. **This command is execute-only: it does NOT design or plan new scope.** Produce the plan with `/scope` (or `/adr` for an architectural decision) first, then implement it here. The one exception is the Step 8 refinement pass, which re-plans and applies behaviour-preserving cleanups to the code it just wrote (never new features).
+
+**Incremental delivery.** `/implement` delivers the plan as PR-sized **Segments**, not one big change: it executes Segment by Segment, commits each Work Unit as a savepoint, and opens one small pull request per Segment (stacked by default). Before executing, it asks how to deliver (PR topology and Segment-boundary behaviour) and recommends an option based on the plan's scope; under `--auto` it self-selects the recommended options and records them as assumptions. This follows `engineering-standards`: PRs under 500 lines, one concern each, "ship a sequence of small PRs".
 
 Invoked as `/implement`. The remaining arguments are the task reference and flags.
 
@@ -33,17 +35,31 @@ TASK SOURCES:
 
 OPTIONS:
   --help     Show this help
-  --auto     Autonomous: execute Work Units in dependency order (independent ones
-             concurrently, in isolated worktrees), commit each, open a PR
+  --auto     Autonomous: execute Segments in dependency order, each Work Unit
+             committed as a savepoint, then open the PR set (no prompts;
+             self-selects the recommended delivery strategy)
   --no-tdd   Write tests alongside implementation instead of red/green/refactor
   --force    In --auto mode, override quality-gate FAILs (logged)
+  --pr-strategy=<stacked|independent|single>
+             Preset the PR topology and skip that question (default: ask)
+  --boundary=<savepoint|pause>
+             Preset the Segment-boundary behaviour and skip that question
+             (default: ask; recommended: savepoint)
+
+DELIVERY: /implement splits the plan into PR-sized Segments and, before
+executing, asks two things (unless preset by flag or running --auto):
+  - PR topology: stacked (default) | independent | single
+  - Boundary:    savepoint (default) | pause
+It honors the plan's Segments but re-splits any whose real diff exceeds the
+1500-line hard limit (Segments target under 500). Each Segment becomes one small
+pull request.
 
 PLANNING: /implement never designs. If the reference isn't a ready plan, it
 stops and tells you to run /scope or /adr first.
 
 REFINEMENT: after implementing, /implement runs one pass (self quick-review +
 SOLID/DRY/KISS/YAGNI simplify, executed autonomously) then an adversarial
-review, before finishing (or opening the PR in --auto).
+review, before opening the PR set (or finishing, per the chosen boundary).
 ```
 
 ## Execution Rules (MUST)
@@ -114,6 +130,33 @@ If the plan came from `/scope` or `/adr` it already has a companion `*-quality.m
 
 Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the user explicitly overrides (or `--auto --force`). If a project store is present at `~/.claude/memory/<owner>/<repo>/`, record gotchas and rejected alternatives as memory facts; otherwise skip silently.
 
+## Step 4.5: Delivery Strategy Gate (MUST, before executing)
+
+`/implement` delivers the plan as PR-sized **Segments** (one concern, one pull request each), not one monolithic change. Settle the delivery shape now, before any code is written.
+
+**1. Resolve Segments.**
+
+- If the plan has a **Segments** table (a `/scope` plan does), use it: each Segment is an ordered group of Work Units, and the WU table's `Segment` column assigns every WU.
+- If it does NOT (an older plan, an issue, or a spec), **derive** Segments here: pack the Work Units into groups targeting under 500 changed lines (never over the 1500 hard limit), in dependency order, one concern per group where the WU titles make the boundary obvious. A tiny plan may be a single Segment.
+
+Either way, confirm the Segment ordering respects the WU `Requires` graph (no forward cross-Segment dependency) before continuing; reorder if needed.
+
+**2. Choose the delivery strategy.** In interactive mode you MUST ask the user before any code is written (this is the "always ask before implementing" gate). Do this by **calling the `AskUserQuestion` tool** with the two questions below in a single call, each option's recommended choice listed first and labelled, recommended per the plan's scope. Do NOT infer the answers, and do NOT start executing Step 5 until the user has answered. The two questions:
+
+- **PR topology:**
+  - **Stacked** (default recommendation): each Segment branches off the previous one; PR N targets Segment N-1's branch. Recommend when Segments form a dependency chain (the common case).
+  - **Independent off the default branch:** recommend only when the Segments have disjoint files and no cross-Segment `Requires`.
+  - **Single PR:** the current whole-plan behaviour. Recommend for a one-Segment or tiny plan (escape hatch).
+- **Segment-boundary behaviour** (always recommend **Savepoints**):
+  - **Savepoint commits, PRs at end** (default recommendation, and the norm under `--auto`): implement every Segment as savepoint commits on their (unpushed) branches, run Steps 7-9 once over the full diff, then open the PR set at the end. Because nothing is pushed until then, Step 8's stack rebase stays local and each PR-open push is a first push, not a force-push.
+  - **Pause after each PR:** finish a Segment, run Steps 7-9 scoped to just that Segment, open its PR, then stop for the user before the next Segment. No cross-Segment rebase happens (earlier PRs are already open), so a fix implicating an already-delivered Segment becomes a follow-up, not a rebased commit.
+
+**Flag presets.** `--pr-strategy=<stacked|independent|single>` and `--boundary=<savepoint|pause>` preset a choice and skip its question. Absent (and not `--auto`) means ask; this preserves "ask every time" as the default. **Single** topology opens its one PR at the end regardless of boundary (it has a single PR, so "pause after each" is moot).
+
+**3. `--auto`:** do NOT ask. Self-select the recommended options (stacked topology, or independent when the Segments are disjoint; savepoints) and record them in the run's assumptions, surfaced in the final report / PR follow-ups. Flag presets still win over the auto default. `--force` still overrides quality-gate FAILs.
+
+Record the resolved Segments and the chosen strategy in the progress ledger (Step 5) so a resumed run continues with the same shape.
+
 ## Step 5: Execute (delegated subagents, reviewed)
 
 **Delegation (MUST):** this command runs on Sonnet. The orchestrating session reads the plan and delegates each implementation chunk to a subagent via the Task tool, then reviews the result. Delegation keeps each chunk in a fresh, isolated context (no bleed between cycles); the orchestrator spends its turn reviewing, not editing. Independent Work Units run in parallel by default, each isolated in its own git worktree, with the model tier set per role (see the scheduler below). The deep design reasoning already happened in `/scope` or `/adr`, so execution doesn't need Opus.
@@ -128,7 +171,24 @@ Every Task prompt MUST include: the full plan content, the specific cycle/step/W
 
 When SOLID's abstraction pulls against KISS/YAGNI, favour the simplest thing that meets the plan. These principles are also the lens for the refinement pass (Step 8).
 
-**Execution unit (MUST): the plan's Work Units.** Execute one Work Unit (deliverable) at a time in dependency order; each WU becomes one small commit.
+**Execution unit (MUST): the plan's Work Units, grouped by Segment.** Execute **one Segment at a time** in dependency order (Step 4.5). Within a Segment, execute its Work Units with the wave scheduler below; each WU becomes one small savepoint commit. The scheduler, worktree isolation, TDD flow, and verify-by-diff are unchanged; they just run scoped to the current Segment's WUs. **A wave never mixes WUs from two Segments:** the outer Segment loop is strictly sequential relative to the inner wave loop, so the ready set is always drawn from the current Segment only.
+
+**Per-Segment setup (MUST): branch per topology.** Before a Segment's first commit, put HEAD on the right branch (always branch-first; never commit to the default branch). `<seg-slug>` is the Segment's Title kebab-cased and truncated, the same way `<plan-slug>` derives from the topic (Step 7 of `/scope`). Capture the branch's starting ref as `<segment-base>` (used by the re-split guard):
+
+- **Stacked:** `git switch -c <type>/<plan-slug>-s<N>-<seg-slug>` off the previous Segment's branch (Segment 1 off the default branch); `<segment-base>` is that starting ref. The base for Segment N's PR is Segment N-1's branch.
+- **Independent:** each Segment branch off the default branch; `<segment-base>` is the default branch.
+- **Single:** one shared branch for the whole plan (the pre-existing behaviour); `<segment-base>` is the branch tip captured at this Segment's first commit.
+
+On a **ledger-driven resume** (Step 5 ledger, e.g. after `/clear`, a crash, or a fresh checkout), the previous Segment's branch may not exist locally: `git fetch origin <prev-Segment-branch>` (or confirm the ref exists) before branching off it. Record `Segment id -> branch -> <segment-base> -> WU commit range` in the ledger as you go.
+
+**Re-split guard (MUST, hard limit = 1500 changed lines; Segments target under 500).** After a Segment's WUs are committed, measure its real diff against its base: `git diff --shortstat <segment-base>...HEAD`. If changed lines exceed 1500, split the Segment at WU boundaries, in git:
+
+1. Pick the last WU that keeps the Segment at or under budget; call its commit `<split-sha>`.
+2. `git branch <type>/<plan-slug>-s<N>b-<seg-slug> HEAD` to save the excess commits, then `git reset --hard <split-sha>` on the current Segment branch to drop them from it.
+3. The new `s<N>b` Segment branches off the trimmed current Segment (its `<segment-base>` is `<split-sha>`; under **independent** it still branches off the default branch); its PR targets the current Segment's branch under stacked, the default branch under independent, or the current Segment's (shared) branch under single. The `b` suffix avoids colliding with a planned `s<N+1>`. **Under single topology this means the re-split adds one follow-up PR** stacked on the shared branch: single still ships one PR normally, but the 1500 hard limit is never breached, so an overflowing single plan yields the shared-branch PR plus one follow-up.
+4. **Deliver `s<N>b` as the very next Segment**, before any pre-planned `s<N+1>`, then continue the outer loop. Note the re-split (new Segment id, split point) in the ledger and the final report.
+
+The plan's Segments are the starting point; reality wins at the budget.
 
 **Parallel-by-default scheduler (MUST).** Don't wait for the plan to pre-label groups. Build the WU dependency graph from the `Requires` column and run the acyclicity check (the procedure in Step 6) now, before executing. Then execute in waves until every WU is done:
 
@@ -148,7 +208,7 @@ Scope each WU's verify command to its own test files (the full suite runs in Ste
 
 - `git worktree add "$ROOT/.claude/worktrees/<plan-slug>/<wu-id>" HEAD` off the current branch, one per WU.
 - Dispatch the implementer to work in that worktree path (absolute paths in its brief). It implements, runs its scoped verify, and commits inside the worktree. It does NOT push.
-- **Integrate:** cherry-pick each WU's commit onto the main branch in dependency order. Disjoint files make this conflict-free. If a cherry-pick conflicts, the safety test was violated: STOP, keep the worktrees, and report. Then `git worktree remove` each.
+- **Integrate:** cherry-pick each WU's commit onto the current Segment branch (the run's branch, never the default branch) in dependency order. Disjoint files make this conflict-free. If a cherry-pick conflicts, the safety test was violated: STOP, keep the worktrees, and report. Then `git worktree remove` each.
 - Single-WU waves skip the worktree and run in the main tree.
 
 **File-based handoff.** Keep the orchestrator's context clean over long runs:
@@ -158,7 +218,7 @@ Scope each WU's verify command to its own test files (the full suite runs in Ste
 
 **Verify-by-diff (MUST).** Never take the subagent's word. After a WU returns, confirm the work from git (`git show --stat <sha>`, review the diff against the brief) and the scoped verify. A `DONE` the diff doesn't support is a failure: re-dispatch or stop per Error handling.
 
-**Progress ledger.** Append each completed WU to `.claude/implement/<plan-slug>.progress.md` (gitignored): WU id, status, commit range. On a fresh run or after compaction, read the ledger first and skip WUs already recorded done. First use in a repo, create and ignore the dir:
+**Progress ledger.** Record progress in `.claude/implement/<plan-slug>.progress.md` (gitignored). At the top, record the resolved Segments and the chosen delivery strategy (topology + boundary) from Step 4.5. Per Segment, record: Segment id, branch, its WU rows (WU id, status, commit range), whether it was re-split, and its PR URL once opened. On a fresh run or after compaction, read the ledger first and skip WUs already recorded done and Segments already delivered (a paused run resumes from the first Segment without a PR URL). First use in a repo, create and ignore the dir:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
@@ -183,16 +243,16 @@ done
 
 **Commit per Work Unit (MUST): small commits.** One coherent commit per WU.
 
-- **Parallel wave (worktree):** the implementer commits its WU inside its worktree, staging exactly its `Files` (it does not push). During integration the orchestrator cherry-picks each commit onto the main branch in dependency order, then pushes the branch once (`git push`). Confirm each WU's files landed (`git log --stat`).
+- **Parallel wave (worktree):** the implementer commits its WU inside its worktree, staging exactly its `Files` (it does not push). During integration the orchestrator cherry-picks each commit onto the current Segment branch in dependency order (never the default branch). The Segment's branch stays local until its PR opens (Step 9, `/create-pull-request` handles the push); under the pause boundary that push happens per Segment mid-run, under savepoint at the end. Confirm each WU's files landed (`git log --stat`).
 - **Single-WU wave (main tree):** after the orchestrator review passes, stage exactly that WU's files (`git add <the WU's Files list>`) and run `/commit-and-push`. Confirm the files are committed (they no longer appear in `git status --porcelain`).
 
 If a commit or cherry-pick fails, retry once, then stop and report.
 
 ## Step 6: Autonomous Mode (`--auto`)
 
-`--auto` executes Work Units in dependency order, committing each, then opens a PR. It commits and pushes without pausing, so:
+`--auto` executes the Segments in dependency order, committing each Work Unit as a savepoint, then opens the PR set (Step 9). It self-selects the delivery strategy (Step 4.5: stacked topology, or independent when the Segments are disjoint; savepoints), records it as an assumption, and runs without pausing, so:
 
-- **Branch first.** If on the default branch, create a feature branch before any commit (never auto-commit to the default branch). Never `--no-verify`, never force-push.
+- **Branch first.** Each Segment is created on its own branch per Step 5's per-Segment setup (never commit to the default branch). Never `--no-verify`, never force-push.
 - A FAIL in Step 4 blocks; `--force` overrides it (logged to the quality report).
 
 **Cycle check (MUST, before executing, both modes).** Step 5's scheduler runs this before any wave; in `--auto` it's the same check. Verify the Work Unit dependency graph is acyclic:
@@ -204,7 +264,7 @@ If a commit or cherry-pick fails, retry once, then stop and report.
 
 Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or how a detected cycle was fixed.
 
-**Per Work Unit (or parallel batch), in dependency order:**
+**Per Segment (in dependency order), then per Work Unit (or parallel batch) within it:** create the Segment's branch per Step 5's per-Segment setup, run its WUs as below, then apply the Step 5 re-split guard before moving to the next Segment.
 
 1. Confirm all WUs in the "Requires" column are done.
 2. Dispatch each wave with the Step 5 parallel-by-default scheduler (ready set, safety test, worktree isolation, integration). Don't gate on `Parallel group` annotations; parallelize whatever the safety test allows, sequential only when forced. Within a WU, WU-0 types first, then the RED/GREEN/REFACTOR flow per cycle (or a single Task for `--no-tdd`), delegated to Sonnet.
@@ -216,7 +276,7 @@ Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or h
 
 ## Step 7: Validate
 
-Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, spawn a Sonnet Task to fix the responsible WU, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open a PR).
+Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, spawn a Sonnet Task to fix the responsible WU on its Segment branch, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open any PRs).
 
 - Fix and re-validate until green.
 - **Doc audit:** every new/modified function has a doc comment explaining WHY; add any that are missing.
@@ -227,7 +287,12 @@ In `--auto`, after validation passes, continue to the refinement pass (Step 8). 
 
 ## Step 8: Refinement Pass (one pass, autonomous)
 
-Once the implementation is green, run ONE refinement pass over the code you just produced. It runs autonomously (no pause, in interactive and `--auto` alike) and executes exactly once per `/implement` invocation; re-validation never re-enters this step. It refines existing code; it does NOT add new scope (YAGNI keeps `/implement` execute-only). Apply the same commit safety as Step 6: if on the default branch, create a feature branch before committing; never commit to the default branch; never force-push.
+Once the implementation is green, run ONE refinement pass over the code you just produced. It runs autonomously (no pause, in interactive and `--auto` alike). It executes once per delivery unit: once over the full diff under the **savepoint** boundary, or once per Segment (before that Segment's PR) under **pause**; re-validation never re-enters this step for the same unit. It refines existing code; it does NOT add new scope (YAGNI keeps `/implement` execute-only). Apply the same commit safety as Step 6: never commit to the default branch, never force-push.
+
+**Multi-Segment routing (MUST).** How this pass runs depends on the Step 4.5 boundary, because you must never force-push (and never rewrite a branch whose PR is already open):
+
+- **Savepoint boundary (default):** no Segment's PR is open yet and the branches are unpushed, so this is safe. Run a single refinement pass over the full implemented diff, commit each fix onto **the Segment branch that owns the touched file** (the earliest Segment that introduced it), then, under stacked topology, rebase the later Segment branches onto their updated bases in order (`git rebase --onto`), purely local. Re-run the Step 7 checks on the affected branches. Step 9 opening the PRs is then the first push of each branch, not a force-push. (Single and independent topologies need no rebase.)
+- **Pause boundary:** earlier Segments' PRs are already open, so you cannot rebase them. Run the refinement scoped to the **current** Segment only, before its PR opens (this is why the pause flow runs Steps 7-9 per Segment). A fix that implicates an already-delivered Segment is recorded as a follow-up, not a rebased commit.
 
 1. **Self quick-review (local).** Apply the `grounding-review` discipline to the branch diff: severity-classified findings, each with `file:line` evidence. Keep it local; don't post anything. Fix only the findings you hold with HIGH confidence (clear bug, dead code, obvious simplification). Leave low-confidence or speculative findings for the adversarial review (Step 9); don't guess.
 2. **Simplify & refactor analysis.** Read the changed files through the Design principles (SOLID, DRY, KISS, YAGNI). List concrete, behaviour-preserving changes: collapse needless indirection, delete dead or speculative code, dedupe real repetition, flatten tangled control flow, tighten names. Skip anything that changes behaviour or adds abstraction with no second caller.
@@ -248,9 +313,17 @@ This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran
 
 Give each reviewer Task a stable `name` and call `TaskStop` on it the moment it returns its findings. Reviewer agents stay idle-alive after returning; this flow never reuses them, so stop each one immediately.
 
-Each lens returns severity-classified findings with `file:line` evidence and a fix per finding. **Consolidate:** merge the returns, dedup overlapping findings, drop anything already addressed, and fact-check each surviving finding against the file at HEAD before acting (discard stale or hallucinated ones). Then apply the fixes you hold with HIGH confidence plus every blocking correctness/security finding, and re-run the Step 7 validation checks. Surface the rest as known follow-ups: don't silently drop them, and don't start a second refinement loop.
+Each lens returns severity-classified findings with `file:line` evidence and a fix per finding. **Consolidate:** merge the returns, dedup overlapping findings, drop anything already addressed, and fact-check each surviving finding against the file at HEAD before acting (discard stale or hallucinated ones). Then apply the fixes you hold with HIGH confidence plus every blocking correctness/security finding, routing each per Step 8's multi-Segment routing (savepoint: fix the owning branch and locally rebase the stack before any push; pause: fix the current Segment only, earlier-Segment fixes become follow-ups), and re-run the Step 7 validation checks. Surface the rest as known follow-ups: don't silently drop them, and don't start a second refinement loop.
 
-**Finish.** In interactive mode, report the applied fixes and unresolved follow-ups to the user; leave the PR to them. In `--auto`, once the Step 7 validation checks are green after the adversarial fixes, open the PR with `gh pr create` (title and body from the plan and commit history, in the `writing-style` voice), listing the unresolved non-blocking findings under a "Follow-ups" heading.
+**Open the PR set (MUST).** Once the Step 7 checks are green after the adversarial fixes, deliver the Segments as pull requests per the Step 4.5 topology, one PR per Segment, via the `/create-pull-request` skill (never raw `gh pr create`; it applies pre-flight checks, the conventional-commit title, the team template, and the `writing-style` voice). Each PR body names the Segment's concern and lists that Segment's slice of the unresolved follow-ups under a "Follow-ups" heading.
+
+- **Stacked:** for each Segment **in order**, `/create-pull-request --base <prev-Segment-branch>` on its branch (Segment 1 uses the default branch). Opening in order matters: `/create-pull-request` pushes the current branch, so each Segment's branch is on origin by the time the next Segment names it as `--base`. This yields the stacked chain (PR #1 targets the default branch, PR #2 targets Segment 1's branch, and so on). Record each PR URL in the ledger.
+- **Independent:** `/create-pull-request` per Segment branch with the default branch as base.
+- **Single:** in `--auto`, one `/create-pull-request` for the whole branch; interactively, leave PR creation to the user (the pre-existing behaviour). If a hard-limit re-split fired (Step 5), the plan now has a shared branch plus one `s<N>b` follow-up branch: open both (follow-up `--base` the shared branch), or in interactive mode point the user at both.
+
+**Boundary behaviour.** With **savepoint** (the default, and `--auto`), open the whole PR set here at the end. With **pause after each PR**, Step 9 has already run per Segment (its scoped review before the PR), so this step opens that one Segment's PR and stops for the user before the next Segment.
+
+**Finish.** Report the applied fixes, the opened PRs (with URLs, bases, and draft state), any re-splits, and the unresolved follow-ups. In interactive mode with the **single** topology chosen, leave PR creation to the user as before; every other topology opens the PRs as above.
 
 ## Decision Rules
 
@@ -263,9 +336,16 @@ Each lens returns severity-classified findings with `file:line` evidence and a f
 | Requires a DB migration | Execute the migration as its own unit with a rollback note |
 | Validation fails | Fix and re-validate before reporting done |
 | `--auto`: WU fails after 3 retries | Stop; report the failed WU and the remaining WUs |
-| `--auto`: validation fails after 3 fixes (including Step 8/9 re-validations) | Stop; report; do NOT open a PR |
+| `--auto`: validation fails after 3 fixes (including Step 8/9 re-validations) | Stop; report; do NOT open any PRs |
 | `--auto`: on the default branch | Create a feature branch before the first commit |
 | `--auto`: commit/push fails | Stop; report (auth, hooks, etc.) |
+| Plan has no Segments (old plan/issue/spec) | Derive Segments targeting under 500 lines (never over 1500) in Step 4.5 |
+| Segment's real diff exceeds the 1500-line hard limit | Re-split at WU boundaries into a new trailing Segment/PR; note it (Step 5) |
+| Interactive, not `--auto`, no strategy flags | Ask the two Step 4.5 questions (topology + boundary), recommend per scope |
+| `--auto` or a strategy flag set | Skip that question; self-select recommended (stacked + savepoint) and record as assumption |
+| Pause boundary chosen | Run Steps 7-9 scoped per Segment, open its PR, stop for the user before the next (Step 9) |
+| Refinement/adversarial fix, savepoint boundary | Commit on the owning Segment branch, locally rebase later branches before any push (Step 8) |
+| Refinement/adversarial fix implicating an already-open PR (pause) | Record as a follow-up; don't rebase an open PR (Step 8) |
 | Refinement (Step 8) implies new feature scope | Record as a follow-up; don't build it (YAGNI) |
 | Adversarial review (Step 9) finds a blocking issue | Fix it, re-validate, then finish; report non-blocking findings as follow-ups |
 | Refinement or adversarial fix would change behaviour | Don't fold it into the refactor; treat it as a separate fix and re-validate |
