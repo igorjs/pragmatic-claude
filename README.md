@@ -31,6 +31,8 @@ PRAGMATIC_CLAUDE_REF=v0.1.0 curl -fsSL https://raw.githubusercontent.com/igorjs/
 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash -s -- --no-setup
 ```
 
+Pin `PRAGMATIC_CLAUDE_REF` to a tag or commit for a reproducible, reviewable install: the same files every run, and a ref you inspect first.
+
 Prefer git? Clone fresh:
 
 ```bash
@@ -129,9 +131,49 @@ A single `graph.json` covers every fact, global and project, and rebuilds automa
 - `statusline.sh`: statusline (git branch, PR/CI status, token usage).
 - `output-styles/`: custom output styles.
 
+## Uninstall
+
+```bash
+bash ~/.claude/uninstall.sh
+```
+
+This removes every shipped file from `~/.claude` and strips the `cc.zsh` source line from `~/.zshrc`. It backs up `.zshrc` before editing.
+
+**Preserved by default:** `settings.json`, `.settings.base.json`, `backups/`, and all runtime state (`sessions/`, `projects/`, `history*`, `plugins/`, `memory/`, `plans/`, `runtime/`, `cache/`, `logs/`, `todos/`, `shell-snapshots/`, `.credentials*`, `cc-state/`, `ccd-state/`).
+
+Pass `--purge` to also remove `settings.json`, `.settings.base.json`, and `backups/`.
+
+**Flags:**
+
+- `--yes`: skip the confirmation prompt.
+- `--force`: bypass the git-repo guard (see below).
+- `--purge`: remove user config in addition to shipped files.
+
+**Git-repo guard:** if `~/.claude` is a git working tree, the script refuses to run. Raw `rm` leaves index entries dangling; the correct path for decommissioning is `git rm -r <entries>`. Pass `--force` to bypass this guard if you know what you're doing. `--force` bypasses only the git guard; it doesn't skip the confirmation prompt.
+
 ## Notes
 
 Config edits (`settings.json` or hooks) take effect on a fresh session only. After changing them, run `cc fresh` or plain `claude`. `cc` warns you when a resumed session runs on stale config. The repo tracks config files, not runtime state. The allowlist `.gitignore` keeps sessions, caches, plugin manifests, and credentials out of git.
+
+## Settings merge
+
+Each `install.sh` run merges the shipped template into your `settings.json` rather than overwriting it. New product config lands automatically; keys you've customised stay as you set them.
+
+The merge tracks a baseline in `~/.claude/.settings.base.json`. On each install it compares that baseline against the new template and your live file to decide which keys to update and which to leave alone.
+
+After each install, check `backups/install-<stamp>/settings-merge-skipped.json`. It lists every key the new template tried to change but your customisation took precedence. Entries look like `{"key":"...", "template_had":..., "yours":...}`. Review them and decide whether to adopt the template value manually.
+
+`permissions` is a single top-level key. If you've customised it (for example, added rules to `permissions.deny`), the whole `permissions` block is treated as contested and the template's version is withheld. Your custom rules take precedence. The skip file will show the entry so you can compare and merge manually if the template shipped new deny rules you want.
+
+If an install is interrupted after writing `settings.json` but before writing the baseline, the files are out of sync. Delete `~/.claude/.settings.base.json` to reset. The next install treats the missing baseline as an empty object and falls back to additive mode: all your keys are kept and new template keys are added.
+
+## Security
+
+The shipped install seed (`settings.shared.json`) carries a conservative permissions default. It drops bare `Bash` and the keychain `security` commands from auto-allow. It moves twelve interpreters (`node`, `python3`, `npx`, `npm`, `make`, `awk`, `go`, `source`, `xargs`, `sqlite3`, `psql`, `docker`) from allow to ask, so the installer gets prompted. This closes the obvious `node -e` and `python3 -c` one-liners.
+
+It's not a sandbox. Some commands still run without a prompt: `git`, `gh`, `find -exec`, the `sed` e-command, and anything under `Bash(**/.claude/**)`. The split lowers the default prompt surface, nothing more.
+
+Autoupdates ship disabled through `DISABLE_AUTOUPDATER` in the env block. To turn them back on, remove that variable or set it to `0`.
 
 ## License
 

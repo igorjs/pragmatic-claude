@@ -13,6 +13,7 @@
 #
 # Emits additionalContext at thresholds 4, 8, 12. Past 12 it stays silent so
 # it doesn't become spam: by then Claude has either delegated or chosen not to.
+# shellcheck source=hooks/lib/common.sh
 . "$(dirname "$0")/lib/common.sh"
 
 dir="$(session_dir)"
@@ -23,23 +24,6 @@ tool="$(hi_field '.tool_name')"
 count_file="$dir/search-count"
 seen_file="$dir/seen-reads"
 tool_count_file="$dir/tool-count"
-
-# Atomic counter increment using mkdir spinlock (macOS-safe, no flock needed).
-# Sets global _INCR_RESULT to the new counter value (avoids a racy re-read).
-_incr_counter() {
-  local file="$1"
-  local lock="${file}.lock"
-  local i=0
-  until mkdir "$lock" 2>/dev/null || [ "$i" -ge 50 ]; do
-    sleep 0.01; i=$((i+1))
-  done
-  local n
-  n="$(cat "$file" 2>/dev/null || echo 0)"
-  n=$((n + 1))
-  printf '%s' "$n" > "${file}.tmp.$$" && mv "${file}.tmp.$$" "$file"
-  rmdir "$lock" 2>/dev/null
-  _INCR_RESULT="$n"
-}
 
 # Bump global tool counter (statusline reads this).
 _incr_counter "$tool_count_file"

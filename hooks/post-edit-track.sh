@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 # PostToolUse hook on Edit/Write/NotebookEdit: record edited absolute path + ts
 # to per-session edits.jsonl. Consumed by preread-edit-check.sh + statusline.
+# shellcheck source=hooks/lib/common.sh
 . "$(dirname "$0")/lib/common.sh"
 
 dir="$(session_dir)"
@@ -24,21 +25,6 @@ ts="$(date +%s)"
 
 line="$(jq -cn --arg p "$abs" --argjson t "$ts" '{path:$p, ts:$t}')"
 atomic_append "$dir/edits.jsonl" "$line"
-
-# Atomic counter increment using mkdir spinlock (macOS-safe, no flock needed).
-_incr_counter() {
-  local file="$1"
-  local lock="${file}.lock"
-  local i=0
-  until mkdir "$lock" 2>/dev/null || [ "$i" -ge 50 ]; do
-    sleep 0.01; i=$((i+1))
-  done
-  local n
-  n="$(cat "$file" 2>/dev/null || echo 0)"
-  n=$((n + 1))
-  printf '%s' "$n" > "${file}.tmp.$$" && mv "${file}.tmp.$$" "$file"
-  rmdir "$lock" 2>/dev/null
-}
 
 # Bump human-readable edit count (used by statusline).
 count_file="$dir/edit-count"

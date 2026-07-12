@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Igor Santos
+# SPDX-License-Identifier: MIT
+#
+# gen-shared-settings.test.sh: tests for the settings.shared.json generator in
+# shell/gen-shared-settings.sh. Covers the happy-path transform (canned
+# permissions, forced model/skipAutoPermissionPrompt, deleted personal keys,
+# product-key passthrough) plus every input guard (bad JSON, missing files,
+# degenerate permissions, no args).
+#
+# Run:  bash shell/gen-shared-settings.test.sh
+# Exit: 0 if all scenarios pass, non-zero otherwise.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEN="${SCRIPT_DIR}/gen-shared-settings.sh"
+PASS=0
+FAIL=0
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "SKIP: jq not available; generator tests need jq"
+  exit 0
+fi
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+pass() { echo "PASS: $1"; (( PASS++ )) || true; }
+fail() { echo "FAIL: $1${2:+ -> $2}"; (( FAIL++ )) || true; }
+
+# Canned permissions fixture, reused read-only across scenarios.
+PERMS="${WORK}/perms.json"
+cat > "$PERMS" <<'JSON'
+{
+  "allow": ["Read", "Bash(git:*)"],
+  "deny": ["Read(**/.env)"],
+  "ask": ["Bash(curl:*)"],
+  "defaultMode": "auto"
+}
+JSON
+
+# Full live-like source with personal keys, product keys, and an unknown key.
+SRC_FULL="${WORK}/src-full.json"
+cat > "$SRC_FULL" <<'JSON'
+{
+  "model": "sonnet",
+  "skipAutoPermissionPrompt": true,
+  "effortLevel": "xhigh",
+  "theme": "dark-daltonized",
+  "preferredNotifChannel": "ghostty",
+  "prefersReducedMotion": true,
+  "permissions": { "allow": ["Bash"], "deny": [], "ask": [], "defaultMode": "auto" },
+  "env": { "IS_DEMO": "1", "DISABLE_AUTOUPDATER": "1" },
+  "hooks": { "SessionStart": [{ "hooks": [] }] },
+  "statusLine": { "type": "command", "command": "bash x" },
+  "customUnknownKey": { "keep": "me" }
+}
+JSON
+
+# A: happy path -> canned perms, forced model/skipAutoPermissionPrompt, personal
+#    keys gone, product + unknown keys pass through.
+out="$("$GEN" "$SRC_FULL" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -eq 0 ]] && printf '%s' "$out" | jq -e --slurpfile p "$PERMS" '
+      (.permissions == $p[0])
+  and (has("model") and .model == "default")
+  and (.skipAutoPermissionPrompt == false)
+  and ((has("effortLevel") or has("theme")
+        or has("preferredNotifChannel") or has("prefersReducedMotion")) | not)
+  and (.env.IS_DEMO == "1" and .env.DISABLE_AUTOUPDATER == "1")
+  and (has("hooks") and has("statusLine"))
+  and (.customUnknownKey.keep == "me")
+' >/dev/null 2>&1; then
+  pass "happy path: canned perms, forced keys, personal keys dropped, passthrough"
+else
+  fail "happy path" "rc=$rc"
+fi
+
+# B: model absent in source -> forced to "default".
+SRC_NOMODEL="${WORK}/src-nomodel.json"
+echo '{"env":{"IS_DEMO":"1"}}' > "$SRC_NOMODEL"
+out="$("$GEN" "$SRC_NOMODEL" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -eq 0 ]] && printf '%s' "$out" \
+   | jq -e 'has("model") and .model == "default"' >/dev/null 2>&1; then
+  pass "model absent -> default"
+else
+  fail "model absent -> default" "rc=$rc"
+fi
+
+# C: model set to a non-default string -> forced to "default".
+SRC_OPUS="${WORK}/src-opus.json"
+echo '{"model":"opus","env":{}}' > "$SRC_OPUS"
+out="$("$GEN" "$SRC_OPUS" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -eq 0 ]] && printf '%s' "$out" \
+   | jq -e '.model == "default"' >/dev/null 2>&1; then
+  pass "model non-default -> default"
+else
+  fail "model non-default -> default" "rc=$rc"
+fi
+
+# D: malformed source JSON -> non-zero exit AND empty stdout.
+SRC_BAD="${WORK}/src-bad.json"
+echo '{ this is not json ' > "$SRC_BAD"
+out="$("$GEN" "$SRC_BAD" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "malformed source -> non-zero exit, empty stdout"
+else
+  fail "malformed source" "rc=$rc out='${out:0:40}'"
+fi
+
+# E: missing source file -> non-zero exit.
+out="$("$GEN" "${WORK}/does-not-exist.json" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "missing source -> non-zero exit"
+else
+  fail "missing source" "rc=$rc"
+fi
+
+# F: missing permissions file -> non-zero exit.
+out="$("$GEN" "$SRC_FULL" "${WORK}/no-perms.json" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "missing permissions -> non-zero exit"
+else
+  fail "missing permissions" "rc=$rc"
+fi
+
+# G: degenerate permissions {} (no allow array) -> guard rejects.
+PERMS_EMPTY="${WORK}/perms-empty.json"
+echo '{}' > "$PERMS_EMPTY"
+out="$("$GEN" "$SRC_FULL" "$PERMS_EMPTY" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "degenerate permissions {} -> guard rejects"
+else
+  fail "degenerate permissions {}" "rc=$rc"
+fi
+
+# H: permissions with an empty allow array -> guard rejects.
+PERMS_NOALLOW="${WORK}/perms-noallow.json"
+echo '{"allow":[],"deny":[],"ask":[]}' > "$PERMS_NOALLOW"
+out="$("$GEN" "$SRC_FULL" "$PERMS_NOALLOW" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "empty allow array -> guard rejects"
+else
+  fail "empty allow array" "rc=$rc"
+fi
+
+# I: no arguments -> guard rejects.
+out="$("$GEN" 2>/dev/null)"; rc=$?
+if [[ $rc -ne 0 && -z "$out" ]]; then
+  pass "no arguments -> guard rejects"
+else
+  fail "no arguments" "rc=$rc"
+fi
+
+TOTAL=$(( PASS + FAIL ))
+echo ""
+echo "${PASS}/${TOTAL} scenarios passed"
+
+[[ $FAIL -eq 0 ]]
