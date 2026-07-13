@@ -104,6 +104,47 @@ $_learn_nudge"
   fi
 fi
 
+# ── Skills & commands primer ──
+# Surface the toolkit so the model reaches for a fitting skill/command instead
+# of ad-hoc steps. The catalog is built from the global skills/ and commands/
+# frontmatter, so new entries appear automatically. Disable with SKILLS_PRIMER=0.
+if [[ "${SKILLS_PRIMER:-1}" != "0" ]]; then
+  # _fm_field <file> <field>: value of a field in the first frontmatter block.
+  _fm_field() {
+    awk -v f="$2" '
+      NR==1 && $0=="---"{inb=1; next}
+      inb && $0=="---"{exit}
+      inb && index($0, f":")==1 { sub("^"f":[[:space:]]*",""); gsub(/^"|"$/,""); print; exit }
+    ' "$1"
+  }
+  # _one_line <text>: collapse whitespace to one line, cap the length.
+  _one_line() {
+    local s; s="$(printf '%s' "$1" | tr '\n\t' '  ')"
+    if (( ${#s} > 150 )); then printf '%s...' "${s:0:147}"; else printf '%s' "$s"; fi
+  }
+  _skill_lines=""
+  for _sf in "$HOME"/.claude/skills/*/SKILL.md; do
+    [[ -f "$_sf" ]] || continue
+    _nm="$(_fm_field "$_sf" name)"; [[ -z "$_nm" ]] && _nm="$(basename "$(dirname "$_sf")")"
+    _skill_lines+="- ${_nm}: $(_one_line "$(_fm_field "$_sf" description)")"$'\n'
+  done
+  _cmd_lines=""
+  for _cf in "$HOME"/.claude/commands/*.md; do
+    [[ -f "$_cf" ]] || continue
+    _cmd_lines+="- /$(basename "$_cf" .md): $(_one_line "$(_fm_field "$_cf" description)")"$'\n'
+  done
+  if [[ -n "$_skill_lines" || -n "$_cmd_lines" ]]; then
+    _toolkit="Your toolkit. Before substantive work, check whether one of these fits and use it instead of ad-hoc steps: plan a feature with /scope, execute a ready plan with /implement, record a decision with /adr, commit and push with /commit-and-push, open a PR with /create-pull-request, review a PR with /quick-review or /deep-review, debug a failure with the systematic-debugging skill. Invoke skills via the Skill tool, commands as slash commands. Full catalog (name: what it is for):"
+    [[ -n "$_skill_lines" ]] && _toolkit+=$'\n\nSkills:\n'"$_skill_lines"
+    [[ -n "$_cmd_lines" ]] && _toolkit+=$'\nCommands:\n'"$_cmd_lines"
+    if [[ -n "$extra_context" ]]; then
+      extra_context="$extra_context"$'\n\n'"$_toolkit"
+    else
+      extra_context="$_toolkit"
+    fi
+  fi
+fi
+
 # Emit a single SessionStart payload if there is anything to say.
 if [[ -n "$system_message" || -n "$extra_context" ]]; then
   jq -cn --arg um "$system_message" --arg cm "$extra_context" '
