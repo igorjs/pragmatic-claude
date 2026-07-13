@@ -272,11 +272,11 @@ Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or h
 4. Commit and integrate per the Step 5 commit rules: implementers commit inside their worktrees, the orchestrator cherry-picks in dependency order and pushes; single-WU waves commit in the main tree.
 5. Mark each WU's "Done When" checkboxes in the plan file.
 
-**Error handling:** if a WU fails (verify fails, wrong output, or commit fails) after 3 fix retries, **stop**. Don't continue to dependent WUs. Report the failed WU, the error, and the remaining WUs.
+**Error handling:** when a WU's verify fails or its output is wrong, apply the `systematic-debugging` skill before retrying: find the root cause first, don't stack blind fix attempts. If it still fails (verify fails, wrong output, or commit fails) after 3 fix retries, **stop**. Don't continue to dependent WUs. Report the failed WU, the root cause found so far, and the remaining WUs.
 
 ## Step 7: Validate
 
-Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, spawn a Sonnet Task to fix the responsible WU on its Segment branch, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open any PRs).
+Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, apply the `systematic-debugging` skill to find the root cause, then spawn a Sonnet Task to fix the responsible WU on its Segment branch, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open any PRs).
 
 - Fix and re-validate until green.
 - **Doc audit:** every new/modified function has a doc comment explaining WHY; add any that are missing.
