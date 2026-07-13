@@ -4,8 +4,9 @@
 #
 # gen-shared-settings.sh: derive the tracked, conservative settings.shared.json
 # template from a live settings.json. Replaces .permissions with a canned
-# permissions object, forces model:"default" and skipAutoPermissionPrompt:false,
-# and drops the owner's personal keys. Product config (env, hooks, statusLine,
+# permissions object, forces skipAutoPermissionPrompt:false, strips any pinned
+# model (the harness or the user's own settings.json chooses it), and drops the
+# owner's personal keys. Product config (env, hooks, statusLine,
 # worktree, plugins, ...) passes through unchanged. Merged JSON goes to stdout.
 #
 # Usage: gen-shared-settings.sh SRC [PERMS]
@@ -40,6 +41,6 @@ jq -e 'type == "object" and (.allow | type == "array" and length > 0)' \
   "$PERMS" >/dev/null 2>&1 \
   || die "permissions file must be an object with a non-empty allow array: $PERMS" 2
 
-jq -s '.[0] + {permissions: .[1], model: "default", skipAutoPermissionPrompt: false}
-       | del(.effortLevel, .theme, .preferredNotifChannel, .prefersReducedMotion)' \
+jq -s '.[0] + {permissions: .[1], skipAutoPermissionPrompt: false}
+       | del(.model, .effortLevel, .theme, .preferredNotifChannel, .prefersReducedMotion)' \
   "$SRC" "$PERMS"
