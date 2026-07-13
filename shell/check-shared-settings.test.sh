@@ -52,7 +52,6 @@ JSON
 BASE="${WORK}/base.json"
 cat > "$BASE" <<'JSON'
 {
-  "model": "default",
   "skipAutoPermissionPrompt": false,
   "permissions": {},
   "hooks": {
@@ -113,7 +112,7 @@ expect_fail() {  # <name> <template>
 
 expect_pass "good template validates"                 "$GOOD"
 expect_fail "wrong .permissions is rejected"          "$BAD_PERMS"
-expect_fail ".model != default is rejected"           "$BAD_MODEL"
+expect_fail "a pinned .model is rejected"             "$BAD_MODEL"
 expect_fail ".skipAutoPermissionPrompt != false"      "$BAD_SKIP"
 expect_fail "missing hook path is rejected"           "$BAD_HOOK"
 
