@@ -4,7 +4,7 @@
 #
 # check-shared-settings.sh: validate the shipped settings.shared.json template
 # against the tracked permissions.shared.json and the repo layout. Confirms the
-# permissions block matches, the model/prompt defaults are set, no personal
+# permissions block matches, no model is pinned, the prompt defaults are set, no personal
 # keys leaked in, and every hook command resolves to a file inside the repo.
 #
 # Run:  bash shell/check-shared-settings.sh TEMPLATE PERMISSIONS REPO_ROOT
@@ -41,8 +41,10 @@ jq -e --slurpfile perms "$PERMISSIONS" '.permissions == $perms[0]' "$TEMPLATE" >
   || die ".permissions in template does not deep-equal $PERMISSIONS"
 
 # Shipped defaults.
-jq -e '.model == "default"' "$TEMPLATE" >/dev/null 2>&1 \
-  || die ".model must equal \"default\" in $TEMPLATE"
+# The seed must NOT pin a model: "default" is not a valid model value, so the
+# harness (or the user's own settings.json) chooses the model instead.
+jq -e 'has("model") | not' "$TEMPLATE" >/dev/null 2>&1 \
+  || die ".model must not ship in $TEMPLATE (the harness or user picks the model)"
 
 jq -e '.skipAutoPermissionPrompt == false' "$TEMPLATE" >/dev/null 2>&1 \
   || die ".skipAutoPermissionPrompt must be false in $TEMPLATE"

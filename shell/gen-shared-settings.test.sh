@@ -57,12 +57,12 @@ cat > "$SRC_FULL" <<'JSON'
 }
 JSON
 
-# A: happy path -> canned perms, forced model/skipAutoPermissionPrompt, personal
-#    keys gone, product + unknown keys pass through.
+# A: happy path -> canned perms, no model, forced skipAutoPermissionPrompt,
+#    personal keys gone, product + unknown keys pass through.
 out="$("$GEN" "$SRC_FULL" "$PERMS" 2>/dev/null)"; rc=$?
 if [[ $rc -eq 0 ]] && printf '%s' "$out" | jq -e --slurpfile p "$PERMS" '
       (.permissions == $p[0])
-  and (has("model") and .model == "default")
+  and (has("model") | not)
   and (.skipAutoPermissionPrompt == false)
   and ((has("effortLevel") or has("theme")
         or has("preferredNotifChannel") or has("prefersReducedMotion")) | not)
@@ -70,31 +70,31 @@ if [[ $rc -eq 0 ]] && printf '%s' "$out" | jq -e --slurpfile p "$PERMS" '
   and (has("hooks") and has("statusLine"))
   and (.customUnknownKey.keep == "me")
 ' >/dev/null 2>&1; then
-  pass "happy path: canned perms, forced keys, personal keys dropped, passthrough"
+  pass "happy path: canned perms, model stripped, personal keys dropped, passthrough"
 else
   fail "happy path" "rc=$rc"
 fi
 
-# B: model absent in source -> forced to "default".
+# B: model absent in source -> stays absent.
 SRC_NOMODEL="${WORK}/src-nomodel.json"
 echo '{"env":{"IS_DEMO":"1"}}' > "$SRC_NOMODEL"
 out="$("$GEN" "$SRC_NOMODEL" "$PERMS" 2>/dev/null)"; rc=$?
 if [[ $rc -eq 0 ]] && printf '%s' "$out" \
-   | jq -e 'has("model") and .model == "default"' >/dev/null 2>&1; then
-  pass "model absent -> default"
+   | jq -e 'has("model") | not' >/dev/null 2>&1; then
+  pass "model absent -> stays absent"
 else
-  fail "model absent -> default" "rc=$rc"
+  fail "model absent -> stays absent" "rc=$rc"
 fi
 
-# C: model set to a non-default string -> forced to "default".
+# C: model set in source -> stripped from the template.
 SRC_OPUS="${WORK}/src-opus.json"
 echo '{"model":"opus","env":{}}' > "$SRC_OPUS"
 out="$("$GEN" "$SRC_OPUS" "$PERMS" 2>/dev/null)"; rc=$?
 if [[ $rc -eq 0 ]] && printf '%s' "$out" \
-   | jq -e '.model == "default"' >/dev/null 2>&1; then
-  pass "model non-default -> default"
+   | jq -e 'has("model") | not' >/dev/null 2>&1; then
+  pass "model in source -> stripped"
 else
-  fail "model non-default -> default" "rc=$rc"
+  fail "model in source -> stripped" "rc=$rc"
 fi
 
 # D: malformed source JSON -> non-zero exit AND empty stdout.
