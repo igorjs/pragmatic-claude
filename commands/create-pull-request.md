@@ -157,7 +157,8 @@ Derive the title from the diff and commit log gathered in Step 3.
 
 - Format: `type(scope): summary`, e.g. `feat(auth): add SSO retry logic`. Scope is optional.
 - Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `build`, `ci`, `chore`.
-- Imperative mood ("add", not "added" or "adds"), no trailing period, under 72 characters.
+- Imperative mood ("add", not "added" or "adds"), no trailing period.
+- **Length: 72 characters maximum**, counting the entire line including the `type(scope):` prefix. This is a hard limit, not a target. If the draft exceeds it, tighten the summary (drop the scope, cut filler, shorten wording) until it fits; never open a PR with a title over 72 characters. Verify the count before creating the PR, e.g. `printf '%s' "$TITLE" | wc -m` must be `<= 72`.
 - The summary states the **effect** of the change, not a list of files.
 - The ticket goes in the body, not the title.
 
@@ -208,6 +209,13 @@ echo "Body written: $PR_TMP/pr-body.md"
 The PR opens as a **draft** unless `--ready` was passed. The block below derives `DRAFT_ARG` from `$ARGUMENTS` itself, so there is nothing to edit by hand: `--draft` when `--ready` is absent, empty when it is present.
 
 ```bash
+# Hard limit: PR title is at most 72 characters (whole line, prefix included).
+TITLE_LEN=$(printf '%s' "$TITLE" | wc -m | tr -d ' ')
+if [ "$TITLE_LEN" -gt 72 ]; then
+  echo "error: PR title is $TITLE_LEN characters (limit 72); tighten it before creating the PR: $TITLE" >&2
+  exit 1
+fi
+
 # Draft by default; --ready publishes for review. Derived straight from the invocation args.
 DRAFT_ARG="--draft"
 case " $ARGUMENTS " in *" --ready "*) DRAFT_ARG="" ;; esac
