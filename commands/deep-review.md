@@ -1,6 +1,6 @@
 ---
 description: Use for substantial, risky, or cross-cutting PRs. A swarm of specialist reviewer subagents (logic, test, security, data, types, perf, plus conditional) run in parallel, consolidated and fact-checked, then posted as a pending GitHub review. Heavier than /quick-review.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task, Skill
+allowed-tools: Bash, Read, Grep, Glob, Write, Agent, Skill
 argument-hint: "[PR number] [--all] [--quick] [--preset <name>] [--self] [--help]"
 model: opus
 effort: max
@@ -8,7 +8,7 @@ effort: max
 
 # Deep Review: Multi-Agent PR Review
 
-Review a pull request with a swarm of specialist reviewer subagents run in parallel, each a focused `Task` agent under the `grounding-review` and `grounding-research` discipline. The orchestrating session consolidates, dedups, and fact-checks their findings, then posts them as a **pending** GitHub review (same posting flow as `/quick-review`). This is heavier and slower than `/quick-review`; use it for substantial, risky, or cross-cutting PRs.
+Review a pull request with a swarm of specialist reviewer subagents run in parallel, each a focused `reviewer` subagent under the `grounding-review` and `grounding-research` discipline. The orchestrating session consolidates, dedups, and fact-checks their findings, then posts them as a **pending** GitHub review (same posting flow as `/quick-review`). This is heavier and slower than `/quick-review`; use it for substantial, risky, or cross-cutting PRs.
 
 Invoked as `/deep-review`. The remaining arguments are an optional PR number and flags.
 
@@ -180,9 +180,9 @@ printf '%s\n' "$CHECK_OUTPUT"
 
 If install or run fails, log the error in `CHECK_OUTPUT` and continue: never block the review. The `printf` at the end makes the output visible in the tool result so Step 3 can embed it verbatim in each subagent prompt.
 
-## Step 3: Spawn the reviewer swarm (parallel Task subagents)
+## Step 3: Spawn the reviewer swarm (parallel reviewer subagents)
 
-Spawn the selected reviewers **in parallel** (one message, multiple `Task` calls), each as a `general-purpose` subagent with `model: "sonnet"`. Each reviewer prompt MUST include: its focus area (from the table), the PR diff and `HEAD_SHA`, the `grounding-review` + `grounding-research` discipline, the absolute `$WT` path (or a note that the tree is in-place if `WT` is empty) with the instruction "Read and grep files under <WT>; do not install or build anything.", and the `CHECK_OUTPUT` captured in Step 2b verbatim under a heading "Check suite output (from orchestrator)".
+Spawn the selected reviewers **in parallel** (one message, multiple `Agent` calls), each as a `reviewer` subagent (`subagent_type: reviewer`). The `reviewer` agent is structurally read-only (Read/Grep/Glob only, no Edit/Write/Bash) and pins its own model tier and the `grounding-review` + `grounding-research` discipline, so the orchestrator no longer sets `model` per call. Each reviewer prompt MUST include: its focus area (from the table), the PR diff and `HEAD_SHA`, the `grounding-review` + `grounding-research` discipline, the absolute `$WT` path (or a note that the tree is in-place if `WT` is empty) with the instruction "Read and grep files under <WT>; do not install or build anything.", and the `CHECK_OUTPUT` captured in Step 2b verbatim under a heading "Check suite output (from orchestrator)".
 
 In worktree mode, each reviewer prompt includes the absolute `$WT` path with the instruction "read and grep files under $WT; do not install or build." Subagents are read-only. The orchestrator has already run the checks once in Step 2b; subagents use the captured output as context, not as a trigger to re-run.
 
