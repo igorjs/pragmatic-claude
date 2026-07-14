@@ -1,6 +1,6 @@
 ---
 description: Deeply learn the current project (git history, PRs, JIRA, Confluence), store distilled topics in the memory system (routed per-project vs global), and export a navigable graph.json of the memory graph.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task, WebFetch
+allowed-tools: Bash, Read, Grep, Glob, Write, Agent, WebFetch
 argument-hint: "[--refresh] [--graph-only] [--stage] [--from-staged] [--max-prs N] [--max-commits N]"
 model: opus
 effort: high
@@ -27,7 +27,7 @@ Parse `$ARGUMENTS`:
 2. Read files before asserting facts about them (grounding).
 3. Combine independent bash calls into a single tool call.
 4. Never edit project code or config. Writes are limited to `~/.claude/memory/` files.
-5. Dispatch subagents for collection and analysis with the Task tool: issue the independent Task calls in a single message so they run in parallel. Subagents return distilled structured findings, never raw dumps.
+5. Dispatch subagents for collection and analysis with the Agent tool: issue the independent Agent calls in a single message so they run in parallel. Subagents return distilled structured findings, never raw dumps.
 6. No silent truncation. If you cap commits/PRs or skip a source, the final report says so.
 7. Never persist secrets. Tokens, keys, or credentials seen in configs/CI must never enter a memory fact.
 

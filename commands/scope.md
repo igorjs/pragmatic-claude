@@ -1,6 +1,6 @@
 ---
 description: Interview-driven planning session with deep requirements gathering that produces a verified implementation plan, its Work Units grouped into suggested PR-sized Segments.
-allowed-tools: Bash, Read, Grep, Glob, Write, Task, Skill
+allowed-tools: Bash, Read, Grep, Glob, Write, Agent, Skill
 argument-hint: "[topic | ./prompt.md | .claude/designs/*.md] [--auto] [--help]"
 model: opus
 effort: xhigh
@@ -244,7 +244,7 @@ If any condition fails, leave the WUs ungrouped (they run sequentially). When un
 
 ### Step 5: Quality Gate (MUST)
 
-After producing the plan, run the three-phase gate. Do NOT skip it. Do NOT ask the user to verify it. Do NOT proceed to Step 6 until it passes. The criteria are inline below. Run Phase 1 first (Phases 2 and 3 read its report), then dispatch Phase 2 and Phase 3 in parallel: issue both Task calls in a single message so they run at once. The 1-before-(2,3) order is the only real dependency here; Phase 2 and Phase 3 are independent, so they never run one at a time. Consolidate all three at the Quality Gate Result.
+After producing the plan, run the three-phase gate. Do NOT skip it. Do NOT ask the user to verify it. Do NOT proceed to Step 6 until it passes. The criteria are inline below. Run Phase 1 first (Phases 2 and 3 read its report), then dispatch Phase 2 and Phase 3 in parallel: issue both Agent calls in a single message so they run at once. The 1-before-(2,3) order is the only real dependency here; Phase 2 and Phase 3 are independent, so they never run one at a time. Consolidate all three at the Quality Gate Result.
 
 #### Phase 1: Fact-Check
 
