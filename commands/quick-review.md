@@ -2,7 +2,7 @@
 description: Quick single-pass PR review (or current branch self-review) using grounding-review discipline + Conventional Comments. Posts findings as a pending GitHub review for human submit.
 allowed-tools: Bash, Read, Grep, Glob, Write, Agent, Skill
 argument-hint: "[PR number]"
-model: opus
+model: sonnet
 effort: high
 ---
 
@@ -145,7 +145,7 @@ Capture: `REPO`, `PR_NUMBER`, `HEAD_SHA`, `SELF_REVIEW`, `REVIEW_JSON`. You'll n
 
 Reading and analysing the changed files is where main-context rot accumulates, so it runs in an isolated `reviewer` subagent, not the main session. The orchestrator keeps only the returned report, never the file contents.
 
-Spawn ONE `reviewer` subagent (`subagent_type: reviewer`) with `model: opus` (the agent defaults to Sonnet for the deep-review swarm; override it here, since this is the sole reviewer and matches this command's review depth). Because the review is single-pass, its focus is the ENTIRE diff (logic, tests, security, data, types, perf, docs), not one lens.
+Spawn ONE `reviewer` subagent (`subagent_type: reviewer`); it runs on the agent's default Sonnet tier (reviews stay off Opus for cost). Because the review is single-pass, its focus is the ENTIRE diff (logic, tests, security, data, types, perf, docs), not one lens.
 
 The subagent prompt MUST include:
 
