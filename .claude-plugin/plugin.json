@@ -1,0 +1,23 @@
+{
+  "name": "pragmatic-claude",
+  "displayName": "Pragmatic Claude",
+  "version": "0.1.0",
+  "description": "A pragmatic Claude Code toolkit: opinionated skills, slash commands, subagents, and safety and state hooks for planning, review, memory, and guarded editing.",
+  "author": {
+    "name": "Igor Santos",
+    "email": "2278164+igorjs@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/igorjs/pragmatic-claude",
+  "repository": "https://github.com/igorjs/pragmatic-claude",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "commands",
+    "agents",
+    "hooks",
+    "code-review",
+    "planning",
+    "memory",
+    "workflows"
+  ]
+}
