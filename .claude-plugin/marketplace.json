@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "pragmatic-claude",
+  "description": "Marketplace for the pragmatic-claude Claude Code toolkit.",
+  "owner": {
+    "name": "Igor Santos",
+    "email": "2278164+igorjs@users.noreply.github.com"
+  },
+  "plugins": [
+    {
+      "name": "pragmatic-claude",
+      "description": "A pragmatic Claude Code toolkit: opinionated skills, slash commands, subagents, and safety and state hooks.",
+      "source": {
+        "source": "github",
+        "repo": "igorjs/pragmatic-claude"
+      },
+      "category": "workflow",
+      "homepage": "https://github.com/igorjs/pragmatic-claude",
+      "license": "MIT",
+      "author": {
+        "name": "Igor Santos",
+        "email": "2278164+igorjs@users.noreply.github.com"
+      }
+    }
+  ]
+}
