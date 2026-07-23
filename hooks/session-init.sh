@@ -145,6 +145,21 @@ if [[ "${SKILLS_PRIMER:-1}" != "0" ]]; then
   fi
 fi
 
+# ── Async & deferred-tool discipline ──
+# Two recurring failure classes cost real tokens: (1) calling a deferred tool
+# (surfaced by name only, schema not loaded) with guessed params, which fails
+# client-side validation; (2) backgrounding a command whose result the next
+# step needs, then racing or polling it. One compact reminder heads both off.
+# Disable with ASYNC_DISCIPLINE=0.
+if [[ "${ASYNC_DISCIPLINE:-1}" != "0" ]]; then
+  _async_ctx="Async and deferred-tool discipline. (1) Deferred tools are surfaced by name only (e.g. Monitor, TaskCreate, TaskStop, TaskUpdate, ScheduleWakeup): their schemas are NOT loaded, so calling them with guessed parameters fails validation. Before calling any tool that is not already in your active tool list, load it first with ToolSearch (query \"select:NAME\"), then call it; never guess its parameters. (2) Don't run a command in the background when the next step needs its result (installs, builds, typechecks): run it in the foreground with an extended timeout (up to 600000ms). A backgrounded job re-invokes you only when it exits, and shell state (including \`wait\`) does not persist across Bash calls, so there is nothing to poll."
+  if [[ -n "$extra_context" ]]; then
+    extra_context="$extra_context"$'\n\n'"$_async_ctx"
+  else
+    extra_context="$_async_ctx"
+  fi
+fi
+
 # Emit a single SessionStart payload if there is anything to say.
 if [[ -n "$system_message" || -n "$extra_context" ]]; then
   jq -cn --arg um "$system_message" --arg cm "$extra_context" '
