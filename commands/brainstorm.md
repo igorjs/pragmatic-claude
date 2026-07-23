@@ -1,6 +1,6 @@
 ---
 description: Divergent discovery session that explores a raw idea, weighs approaches, and produces an approved design doc that hands off to /scope.
-allowed-tools: Task, Read, Bash, Grep, Glob, Skill, Write, Edit, WebFetch
+allowed-tools: Agent, Read, Bash, Grep, Glob, Skill, Write, Edit, WebFetch
 argument-hint: "[idea | PROJ-123 | ./prompt.md] [--ticket <id>] [--depth 0-2] [--adr] [--no-chain] [--help]"
 model: opus
 effort: xhigh
@@ -91,13 +91,13 @@ Run this only when Argument Resolution found a ticket. Skip it entirely for a pl
 - One hop of direct links: linked issues, sub-tasks, parent epic, and linked PRs. `--depth` controls this (0 = ticket only, 1 = direct links (default), 2 = one more hop). Clamp `--depth` to the range 0 to 2, so the crawl is never unbounded.
 - Bounds: cap total related items at about 15, dedup visited tickets by id, and stop early when a hop adds nothing new.
 
-**Discover in parallel.** Fan out discovery agents over the gathered sources (issue the Task calls in one message so they run at once, per Step 2): the ticket body plus comments, batches of linked items, and the attachments. Each returns a short cited summary (the source id or url, and the facts that bear on the work). These feed the Step 2 digest alongside the codebase exploration. Assign each discovery agent a stable `name` at spawn and `TaskStop` it as soon as it returns. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps a subagent running in the background.
+**Discover in parallel.** Fan out discovery agents over the gathered sources (issue the Agent calls in one message so they run at once, per Step 2): the ticket body plus comments, batches of linked items, and the attachments. Each returns a short cited summary (the source id or url, and the facts that bear on the work). These feed the Step 2 digest alongside the codebase exploration. Assign each discovery agent a stable `name` at spawn and `TaskStop` it as soon as it returns. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps a subagent running in the background.
 
 The ticket's title and description become the idea seed for Step 1's framing. Record the ticket id and link so Step 7 can note them in the design doc.
 
 ### Step 2: Explore context in parallel
 
-Fan out `Explore` agents to map what the dialogue needs. **Dispatch them in parallel: issue all the Task calls in a single message so they run at once.** Read-only exploration has no shared state, so parallel is always the default here.
+Fan out `Explore` agents to map what the dialogue needs. **Dispatch them in parallel: issue all the Agent calls in a single message so they run at once.** Read-only exploration has no shared state, so parallel is always the default here.
 
 Scale the fan-out to the idea: one agent for a tiny change, up to about four for a broad feature. Give each a distinct area, for example:
 

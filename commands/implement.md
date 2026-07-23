@@ -1,6 +1,6 @@
 ---
 description: Execute an approved plan or ADR blueprint (from /scope or /adr) on Sonnet, delegating edits to subagents and committing each Work Unit. Delivers the plan as PR-sized Segments (savepoint commits, one small pull request per Segment; stacked by default), asking the delivery strategy up front. Then runs one refinement pass (self quick-review + SOLID/DRY/KISS/YAGNI simplify, re-planned and executed autonomously) and an adversarial review. Execute-only; it does not design new scope.
-allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Task, Skill
+allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent, Skill
 argument-hint: "[plan | adr-blueprint | #issue | KEY-123 | ./spec.md | text] [--auto] [--no-tdd] [--force] [--pr-strategy=<stacked|independent|single>] [--boundary=<savepoint|pause>] [--help]"
 model: sonnet
 effort: xhigh
@@ -159,11 +159,11 @@ Record the resolved Segments and the chosen strategy in the progress ledger (Ste
 
 ## Step 5: Execute (delegated subagents, reviewed)
 
-**Delegation (MUST):** this command runs on Sonnet. The orchestrating session reads the plan and delegates each implementation chunk to a subagent via the Task tool, then reviews the result. Delegation keeps each chunk in a fresh, isolated context (no bleed between cycles); the orchestrator spends its turn reviewing, not editing. Independent Work Units run in parallel by default, each isolated in its own git worktree, with the model tier set per role (see the scheduler below). The deep design reasoning already happened in `/scope` or `/adr`, so execution doesn't need Opus.
+**Delegation (MUST):** this command runs on Sonnet. The orchestrating session reads the plan and delegates each implementation chunk to a subagent via the Agent tool, then reviews the result. Delegation keeps each chunk in a fresh, isolated context (no bleed between cycles); the orchestrator spends its turn reviewing, not editing. Independent Work Units run in parallel by default, each isolated in its own git worktree, with the model tier set per role (see the scheduler below). The deep design reasoning already happened in `/scope` or `/adr`, so execution doesn't need Opus.
 
-Every Task prompt MUST include: the full plan content, the specific cycle/step/Work Unit, its Gherkin scenarios, the test-structure rules below, the verify command, the design principles below, and grounding rules ("read files before modifying, match existing style, verify imports resolve, don't guess types, apply SOLID/DRY/KISS/YAGNI").
+Every Agent prompt MUST include: the full plan content, the specific cycle/step/Work Unit, its Gherkin scenarios, the test-structure rules below, the verify command, the design principles below, and grounding rules ("read files before modifying, match existing style, verify imports resolve, don't guess types, apply SOLID/DRY/KISS/YAGNI").
 
-**Design principles (MUST).** Every change, and every Task prompt, applies:
+**Design principles (MUST).** Every change, and every Agent prompt, applies:
 - **SOLID:** one responsibility per unit, small focused interfaces, depend on abstractions only at real seams (no abstraction without a second caller).
 - **DRY:** factor out genuine duplication once it recurs (rule of three); don't couple unrelated code that only looks alike.
 - **KISS:** the simplest design that passes the tests and reads clearly; fewer moving parts wins.
@@ -199,7 +199,7 @@ The plan's Segments are the starting point; reality wins at the budget.
    - shared mutable state: both touch a denylisted shared surface (migration dirs; lockfiles `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `Cargo.lock`, `go.sum`; generated, barrel, or index files; global registries; codegen outputs), or there's genuine doubt about shared state.
 
    A plan `Parallel group` annotation, when present, confirms safety but isn't required. A WU that clashes with the forming wave drops to a later wave.
-3. **Dispatch the wave concurrently.** Issue the Task calls in a single message so they run at once, one worktree per WU (see Worktree isolation). A wave of one runs in the main tree with no worktree. Give each Task a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background.
+3. **Dispatch the wave concurrently.** Issue the Agent calls in a single message so they run at once, one worktree per WU (see Worktree isolation). A wave of one runs in the main tree with no worktree. Give each Agent a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background.
 4. **Integrate, then recompute.** After the wave returns, integrate (below), append to the ledger, then recompute the ready set for the next wave.
 
 Scope each WU's verify command to its own test files (the full suite runs in Step 7) so an in-progress sibling can't trip another's tests.
@@ -234,12 +234,12 @@ done
 
 **With TDD (default).** For each cycle within a Work Unit (in dependency order):
 
-1. **RED** - Sonnet Task: "Write ONLY the failing tests encoding this Gherkin scenario, AAA-structured. Don't touch production code." Then run the verify command: tests MUST fail (if they pass, the test proves nothing - fix it).
-2. **GREEN** - Sonnet Task: "Write ONLY the minimal implementation to pass." Run verify: tests MUST pass (on failure, spawn a follow-up Task with the error output).
-3. **REFACTOR** - Sonnet Task: "Clean up without changing behaviour; tests stay green." Run verify.
+1. **RED** - Sonnet subagent: "Write ONLY the failing tests encoding this Gherkin scenario, AAA-structured. Don't touch production code." Then run the verify command: tests MUST fail (if they pass, the test proves nothing - fix it).
+2. **GREEN** - Sonnet subagent: "Write ONLY the minimal implementation to pass." Run verify: tests MUST pass (on failure, spawn a follow-up subagent with the error output).
+3. **REFACTOR** - Sonnet subagent: "Clean up without changing behaviour; tests stay green." Run verify.
 4. **Orchestrator review:** read the modified files; confirm changes match the plan, doc comments explain WHY, no unplanned side effects.
 
-**Without TDD (`--no-tdd`).** For each logical file group: one Sonnet Task implements code + tests together (tests still encode the Gherkin scenarios); run verify; the orchestrator reviews as above.
+**Without TDD (`--no-tdd`).** For each logical file group: one Sonnet subagent implements code + tests together (tests still encode the Gherkin scenarios); run verify; the orchestrator reviews as above.
 
 **Commit per Work Unit (MUST): small commits.** One coherent commit per WU.
 
@@ -267,7 +267,7 @@ Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or h
 **Per Segment (in dependency order), then per Work Unit (or parallel batch) within it:** create the Segment's branch per Step 5's per-Segment setup, run its WUs as below, then apply the Step 5 re-split guard before moving to the next Segment.
 
 1. Confirm all WUs in the "Requires" column are done.
-2. Dispatch each wave with the Step 5 parallel-by-default scheduler (ready set, safety test, worktree isolation, integration). Don't gate on `Parallel group` annotations; parallelize whatever the safety test allows, sequential only when forced. Within a WU, WU-0 types first, then the RED/GREEN/REFACTOR flow per cycle (or a single Task for `--no-tdd`), delegated to Sonnet.
+2. Dispatch each wave with the Step 5 parallel-by-default scheduler (ready set, safety test, worktree isolation, integration). Don't gate on `Parallel group` annotations; parallelize whatever the safety test allows, sequential only when forced. Within a WU, WU-0 types first, then the RED/GREEN/REFACTOR flow per cycle (or a single subagent for `--no-tdd`), delegated to Sonnet.
 3. **Post-WU review:** changes match each WU's spec and file plan; doc comments explain WHY; no files outside the file plan touched.
 4. Commit and integrate per the Step 5 commit rules: implementers commit inside their worktrees, the orchestrator cherry-picks in dependency order and pushes; single-WU waves commit in the main tree.
 5. Mark each WU's "Done When" checkboxes in the plan file.
@@ -276,7 +276,7 @@ Report the result: `Cycle check: PASS (N WUs resolve in topological order)` or h
 
 ## Step 7: Validate
 
-Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, apply the `systematic-debugging` skill to find the root cause, then spawn a Sonnet Task to fix the responsible WU on its Segment branch, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open any PRs).
+Run the project's checks (from Step 3 detection), e.g. type-check, lint, and tests. In `--auto`, run the full suite (not just affected) and, on failure, apply the `systematic-debugging` skill to find the root cause, then spawn a Sonnet subagent to fix the responsible WU on its Segment branch, then amend via `/commit-and-push -a` (max 3 attempts; if still failing, stop and do NOT open any PRs).
 
 - Fix and re-validate until green.
 - **Doc audit:** every new/modified function has a doc comment explaining WHY; add any that are missing.
@@ -303,7 +303,7 @@ Run this pass once. Don't loop: Step 9 is the backstop for whatever remains.
 
 ## Step 9: Adversarial Review (MUST)
 
-This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran before execution against the plan; this one runs after, against the diff. Dispatch it as a swarm of lens-specialized reviewers in parallel (each reads the diff, none writes, so parallel is always safe): issue one Task per lens in a single message, each a `general-purpose` agent on the capable tier under the `grounding-review` discipline, with the full branch diff, the plan, and the refinement notes. Each lens tries to break the work, not bless it:
+This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran before execution against the plan; this one runs after, against the diff. Dispatch it as a swarm of lens-specialized reviewers in parallel (each reads the diff, none writes, so parallel is always safe): issue one Agent call per lens in a single message, each a `general-purpose` agent on the capable tier under the `grounding-review` discipline, with the full branch diff, the plan, and the refinement notes. Each lens tries to break the work, not bless it:
 
 - **Correctness:** bugs, off-by-one, unhandled errors, regressions the tests miss.
 - **Behaviour drift:** did any simplification or refactor change observable behaviour?

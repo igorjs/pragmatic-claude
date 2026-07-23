@@ -1,8 +1,8 @@
 ---
 description: Quick single-pass PR review (or current branch self-review) using grounding-review discipline + Conventional Comments. Posts findings as a pending GitHub review for human submit.
-allowed-tools: Bash, Read, Grep, Glob, Write, Skill
+allowed-tools: Bash, Read, Grep, Glob, Write, Agent, Skill
 argument-hint: "[PR number]"
-model: opus
+model: sonnet
 effort: high
 ---
 
@@ -68,7 +68,7 @@ Comment bodies are read by another engineer, so they use the humane `writing-sty
 ## Execution rules
 
 1. Run every bash block for real. Don't simulate.
-2. Read every file you cite, at the PR's head SHA (grounding-review evidence rule).
+2. The `reviewer` subagent reads every file it cites at the PR's head SHA (grounding-review evidence rule); the orchestrator does not re-read them.
 3. Combine independent bash calls into a single tool call.
 4. Anchor every inline comment to a real `file:line` in the diff. If the line isn't in the diff (e.g. a referenced helper), make it a report-level finding instead.
 5. Never auto-submit. Always create the review in `PENDING` state and ask the user how to submit.
@@ -141,18 +141,27 @@ gh pr diff "$PR_NUMBER"
 
 Capture: `REPO`, `PR_NUMBER`, `HEAD_SHA`, `SELF_REVIEW`, `REVIEW_JSON`. You'll need them for the API calls in Step 4. `REVIEW_JSON` resolves to `/tmp/<org>/<repo>/quick-review-<number>.json`, and its directory is created here so the Step 4 write succeeds.
 
-## Step 2: Read changed files
+## Step 2: Delegate the review pass (isolated reviewer subagent)
 
-For each file in the diff, read the full file before drafting any finding (grounding-review rule).
+Reading and analysing the changed files is where main-context rot accumulates, so it runs in an isolated `reviewer` subagent, not the main session. The orchestrator keeps only the returned report, never the file contents.
 
-- **In-place mode** (`WT` is empty): use local `Read` on each file path.
-- **Worktree mode**: read each file under `$WT/<relative-path>`. Use `Read "$WT/<path>"` or `grep` under `$WT`.
+Spawn ONE `reviewer` subagent (`subagent_type: reviewer`); it runs on the agent's default Sonnet tier (reviews stay off Opus for cost). Because the review is single-pass, its focus is the ENTIRE diff (logic, tests, security, data, types, perf, docs), not one lens.
 
-There is no gh-api fallback. If the worktree setup in Step 1 failed, execution has already stopped.
+The subagent prompt MUST include:
 
-## Step 3: Draft the review report
+- The PR diff and `HEAD_SHA`.
+- How to read files: **worktree mode** → the absolute `$WT` path with "read and grep files under $WT; do not install or build"; **in-place mode** (`WT` empty) → "read the local working tree, which is at HEAD_SHA".
+- The full **Voice rules (mandatory)** and **Anti-patterns to refuse** sections from this command, verbatim, plus the instruction to load `grounding-review` and `writing-style` for the rest of the discipline.
+- The output contract in Step 3: it MUST return exactly that report, one `Post:` block per finding.
+- Read every cited file at `HEAD_SHA` before drafting; quote exact evidence; tag anything unconfirmed `[unverified]`.
 
-Render the `grounding-review` Review Report Format exactly. `/quick-review` is single-pass, so OMIT the `### Reviewers` line; every other line matches the canonical shape. Each finding carries its `Post:` block (the exact GitHub comment), or `Report-only: not on a changed line, no inline draft.` when the evidence is not on a changed diff line.
+Spawn it with a stable `name` (e.g. `qr-<PR_NUMBER>`); the moment it returns its report, `TaskStop` it. There is no gh-api fallback; if the worktree setup in Step 1 failed, execution has already stopped.
+
+## Step 3: Review report contract
+
+The `reviewer` subagent returns a report rendered in the `grounding-review` Review Report Format. `/quick-review` is single-pass, so it OMITS the `### Reviewers` line; every other line matches the canonical shape. Each finding carries its `Post:` block (the exact GitHub comment), or `Report-only: not on a changed line, no inline draft.` when the evidence is not on a changed diff line.
+
+Relay the returned report to the user unchanged, then proceed to posting. Post findings verbatim from their `Post:` blocks; the orchestrator does NOT re-read source files (the subagent already grounded every citation), which is what keeps main context lean.
 
 ## Step 4: Orchestrate posting
 

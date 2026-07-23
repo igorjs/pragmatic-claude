@@ -53,7 +53,7 @@ n="$_INCR_RESULT"
 case "$n" in
   4)
     emit_pre_context "PreToolUse" \
-"Search/read count for this session has reached ${n}. If your remaining searches will fan across more than a couple more files, dispatch the Explore subagent now (Task tool, subagent_type: \"Explore\"): its full search context stays in its window and only a digest comes back to yours. Keeps main context lean for the actual work."
+"Search/read count for this session has reached ${n}. If your remaining searches will fan across more than a couple more files, dispatch the Explore subagent now (Agent tool, subagent_type: \"Explore\"): its full search context stays in its window and only a digest comes back to yours. Keeps main context lean for the actual work."
     ;;
   8)
     emit_pre_context "PreToolUse" \
