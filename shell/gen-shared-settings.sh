@@ -5,9 +5,12 @@
 # gen-shared-settings.sh: derive the tracked, conservative settings.shared.json
 # template from a live settings.json. Replaces .permissions with a canned
 # permissions object, forces skipAutoPermissionPrompt:false, strips any pinned
-# model (the harness or the user's own settings.json chooses it), and drops the
-# owner's personal keys. Product config (env, hooks, statusLine,
-# worktree, plugins, ...) passes through unchanged. Merged JSON goes to stdout.
+# model (the harness or the user's own settings.json chooses it), drops the
+# owner's personal keys, and reduces .hooks to the always-on safety guards only
+# (rm-workspace-guard, bg-await-guard, no-dash-guard). The functional hooks ship
+# with the plugin instead, so the seed wires only the guards to avoid
+# double-firing. Other product config (env, statusLine, worktree, plugins, ...)
+# passes through unchanged. Merged JSON goes to stdout.
 #
 # Usage: gen-shared-settings.sh SRC [PERMS]
 #   SRC    path to the live settings.json (required)
@@ -41,6 +44,21 @@ jq -e 'type == "object" and (.allow | type == "array" and length > 0)' \
   "$PERMS" >/dev/null 2>&1 \
   || die "permissions file must be an object with a non-empty allow array: $PERMS" 2
 
-jq -s '.[0] + {permissions: .[1], skipAutoPermissionPrompt: false}
-       | del(.model, .effortLevel, .theme, .preferredNotifChannel, .prefersReducedMotion)' \
+# Safety guards that ship wired in the seed (everything else is plugin-provided).
+SAFETY_RE="(rm-workspace-guard|bg-await-guard|no-dash-guard)\\.sh"
+
+jq -s --arg safety "$SAFETY_RE" \
+  '.[0] + {permissions: .[1], skipAutoPermissionPrompt: false}
+   | del(.model, .effortLevel, .theme, .preferredNotifChannel, .prefersReducedMotion)
+   | (if has("hooks") then
+        .hooks |= (
+          to_entries
+          | map(.value |= (
+              map(.hooks |= map(select(.command | test($safety))))
+              | map(select((.hooks | length) > 0))
+            ))
+          | map(select((.value | length) > 0))
+          | from_entries
+        )
+      else . end)' \
   "$SRC" "$PERMS"
