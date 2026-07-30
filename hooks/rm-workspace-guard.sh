@@ -30,7 +30,10 @@ canon() {
       *)    out+=("$seg") ;;
     esac
   done
-  for seg in "${out[@]}"; do res+="/$seg"; done
+  # ${out[@]+"${out[@]}"}: `out` is empty when the path collapses to root (e.g.
+  # "/"), and bash 3.2 (macOS system bash) errors "unbound variable" on an empty
+  # array under set -u. This form is a no-op when empty, elements when not.
+  for seg in ${out[@]+"${out[@]}"}; do res+="/$seg"; done
   printf '%s' "${res:-/}"
 }
 
@@ -47,7 +50,9 @@ saw_cd=false
 outside=()
 IFS=' ' read -ra tokens <<< "$CMD"
 
-for token in "${tokens[@]}"; do
+# ${tokens[@]+...}: a whitespace-only command splits to an empty array, which
+# would error under set -u on bash 3.2 and fail the guard open. Safe-expand it.
+for token in ${tokens[@]+"${tokens[@]}"}; do
   [[ -z "$token" ]] && continue
   # A `cd` anywhere means $(pwd) no longer reflects where a relative rm resolves.
   if [[ "$token" == "cd" || "$token" == */cd ]]; then

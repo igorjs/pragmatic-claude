@@ -41,15 +41,36 @@ done < <(printf '%s' "$CMD" | grep -oE -- '(--body-file|--input|--file|-F)[= ]+[
            | sed -E 's/^(--body-file|--input|--file|-F)[= ]+//; s/^"//; s/"$//')
 
 # Reliable Unicode check (bash/BSD-grep can't match multibyte classes portably).
-found="$(CMD_TEXT="$CMD" python3 - "${files[@]}" <<'PY'
-import os, sys
-DASHES = {'‒', '–', '—', '―'}  # figure, en, em, horizontal bar
-if any(c in DASHES for c in os.environ.get('CMD_TEXT', '')):
+# Detection runs in python on the RAW hook payload, passed byte-exact through the
+# environment via os.environb, and NOT on jq's extracted string: some jq builds
+# under a C/POSIX CI locale do not emit multibyte UTF-8 cleanly, dropping the dash
+# and failing the guard open. python's json parser is locale-independent, so we
+# re-extract .tool_input.command here. jq/$CMD above stay for ASCII-only work
+# (the posting gate and file collection), which the dash bytes never affect.
+# Dash code points are written as escapes so this file stays ASCII:
+# U+2012 figure, U+2013 en, U+2014 em, U+2015 horizontal bar.
+# ${files[@]+"${files[@]}"} not "${files[@]}": under set -u, bash 3.2 (the macOS
+# system bash) errors "unbound variable" on an empty array, which would abort the
+# guard before python runs and fail it open. This form expands to nothing when
+# the array is empty and to the quoted elements otherwise.
+found="$(HI_JSON="$HOOK_INPUT" python3 - ${files[@]+"${files[@]}"} <<'PY'
+import os, sys, json
+DASHES = {'\u2012', '\u2013', '\u2014', '\u2015'}
+if hasattr(os, 'environb'):
+    raw = os.environb.get(b'HI_JSON', b'')
+else:
+    raw = os.environ.get('HI_JSON', '').encode('utf-8', 'surrogateescape')
+text = raw.decode('utf-8', 'ignore')
+try:
+    cmd = (json.loads(text).get('tool_input') or {}).get('command') or ''
+except Exception:
+    cmd = text  # unparseable payload: scan the whole thing rather than miss a dash
+if any(c in DASHES for c in cmd):
     print('the command text'); sys.exit(0)
 for p in sys.argv[1:]:
     try:
-        with open(os.path.expanduser(p), encoding='utf-8', errors='ignore') as fh:
-            if any(c in DASHES for c in fh.read()):
+        with open(os.path.expanduser(p), 'rb') as fh:
+            if any(c in DASHES for c in fh.read().decode('utf-8', 'ignore')):
                 print('the file ' + p); sys.exit(0)
     except OSError:
         pass
