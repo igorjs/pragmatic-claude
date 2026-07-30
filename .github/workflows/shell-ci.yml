@@ -74,21 +74,6 @@ jobs:
           bash shell/check-shared-settings.sh settings.shared.json permissions.shared.json .
           bash shell/check-manifest.sh
 
-      - name: DEBUG dash pipeline (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          echo "locale:"; locale
-          echo "bash: $(bash --version | head -1)"
-          echo "python3: $(python3 --version); grep: $(which grep); jq: $(jq --version)"
-          EM=$'\xe2\x80\x94'
-          cmd="git commit -m \"fix: stop stale reads ${EM} after invalidation\""
-          json="$(printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$cmd")")"
-          echo "JSON hexdump (tail):"; printf '%s' "$json" | xxd | tail -4
-          echo "gate grep:"; printf '%s' "$cmd" | grep -cE "(^|[;&|(]|[[:space:]])git[[:space:]]+(commit|tag)\b" || true
-          echo "environb bytes seen by python:"; HI_JSON="$json" python3 -c 'import os;print(len(os.environb.get(b"HI_JSON",b"")))'
-          echo "python dash-detect:"; HI_JSON="$json" python3 -c 'import os,json;t=os.environb.get(b"HI_JSON",b"").decode("utf-8","ignore");c=(json.loads(t).get("tool_input") or {}).get("command") or "";print("has_dash="+str(any(ord(x) in (0x2012,0x2013,0x2014,0x2015) for x in c)))'
-          echo "--- guard decision ---"; printf '%s' "$json" | bash hooks/no-dash-guard.sh; echo "[guard rc=$?]"
-
       - name: Run behavioral test suites
         # Discover every suite so a new *.test.sh is picked up automatically.
         # The git identity is needed by the worktree suites, which commit.

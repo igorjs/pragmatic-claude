@@ -49,7 +49,11 @@ done < <(printf '%s' "$CMD" | grep -oE -- '(--body-file|--input|--file|-F)[= ]+[
 # (the posting gate and file collection), which the dash bytes never affect.
 # Dash code points are written as escapes so this file stays ASCII:
 # U+2012 figure, U+2013 en, U+2014 em, U+2015 horizontal bar.
-found="$(HI_JSON="$HOOK_INPUT" python3 - "${files[@]}" <<'PY'
+# ${files[@]+"${files[@]}"} not "${files[@]}": under set -u, bash 3.2 (the macOS
+# system bash) errors "unbound variable" on an empty array, which would abort the
+# guard before python runs and fail it open. This form expands to nothing when
+# the array is empty and to the quoted elements otherwise.
+found="$(HI_JSON="$HOOK_INPUT" python3 - ${files[@]+"${files[@]}"} <<'PY'
 import os, sys, json
 DASHES = {'\u2012', '\u2013', '\u2014', '\u2015'}
 if hasattr(os, 'environb'):
