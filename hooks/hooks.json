@@ -12,27 +12,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/rm-workspace-guard.sh\"",
-            "if": "Bash(rm:*)",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/bg-await-guard.sh\"",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/no-dash-guard.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Read",
         "hooks": [
           {
