@@ -151,6 +151,40 @@ else
   fail "no arguments" "rc=$rc"
 fi
 
+# J: hooks reduced to the safety guards only; functional hooks and rtk dropped.
+SRC_HOOKS="${WORK}/src-hooks.json"
+cat > "$SRC_HOOKS" <<'JSON'
+{
+  "env": {},
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/session-init.sh" }] }],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "~/.claude/hooks/rm-workspace-guard.sh", "if": "Bash(rm:*)", "timeout": 10 },
+        { "type": "command", "command": "~/.claude/hooks/bg-await-guard.sh", "timeout": 10 },
+        { "type": "command", "command": "~/.claude/hooks/no-dash-guard.sh", "timeout": 10 },
+        { "type": "command", "command": "rtk hook claude" }
+      ] },
+      { "matcher": "Read", "hooks": [{ "type": "command", "command": "~/.claude/hooks/preread-size-check.sh" }] }
+    ],
+    "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "~/.claude/hooks/post-edit-track.sh" }] }]
+  }
+}
+JSON
+out="$("$GEN" "$SRC_HOOKS" "$PERMS" 2>/dev/null)"; rc=$?
+if [[ $rc -eq 0 ]] && printf '%s' "$out" | jq -e '
+      ((.hooks | keys) == ["PreToolUse"])
+  and ((.hooks.PreToolUse | length) == 1)
+  and ([.hooks.PreToolUse[0].hooks[].command]
+        == ["~/.claude/hooks/rm-workspace-guard.sh",
+            "~/.claude/hooks/bg-await-guard.sh",
+            "~/.claude/hooks/no-dash-guard.sh"])
+' >/dev/null 2>&1; then
+  pass "hooks reduced to the three safety guards only"
+else
+  fail "hooks safety-only filter" "rc=$rc hooks=$(printf '%s' "$out" | jq -c '.hooks' 2>/dev/null)"
+fi
+
 TOTAL=$(( PASS + FAIL ))
 echo ""
 echo "${PASS}/${TOTAL} scenarios passed"
