@@ -41,15 +41,26 @@ done < <(printf '%s' "$CMD" | grep -oE -- '(--body-file|--input|--file|-F)[= ]+[
            | sed -E 's/^(--body-file|--input|--file|-F)[= ]+//; s/^"//; s/"$//')
 
 # Reliable Unicode check (bash/BSD-grep can't match multibyte classes portably).
+# Read the command text from the environment as raw bytes via os.environb and
+# decode UTF-8 ourselves: os.environ (str) decoding depends on the CI or shell
+# locale, so a C/POSIX runner mangles the multibyte dash bytes and the guard
+# would fail open. environb is byte-exact on POSIX; os.environ is only a fallback.
+# Body/message files are read in binary for the same reason. Dash code points are
+# written as escapes so this file stays ASCII: U+2012 figure, U+2013 en, U+2014
+# em, U+2015 horizontal bar.
 found="$(CMD_TEXT="$CMD" python3 - "${files[@]}" <<'PY'
 import os, sys
-DASHES = {'‒', '–', '—', '―'}  # figure, en, em, horizontal bar
-if any(c in DASHES for c in os.environ.get('CMD_TEXT', '')):
+DASHES = {'\u2012', '\u2013', '\u2014', '\u2015'}
+if hasattr(os, 'environb'):
+    raw = os.environb.get(b'CMD_TEXT', b'')
+else:
+    raw = os.environ.get('CMD_TEXT', '').encode('utf-8', 'surrogateescape')
+if any(c in DASHES for c in raw.decode('utf-8', 'ignore')):
     print('the command text'); sys.exit(0)
 for p in sys.argv[1:]:
     try:
-        with open(os.path.expanduser(p), encoding='utf-8', errors='ignore') as fh:
-            if any(c in DASHES for c in fh.read()):
+        with open(os.path.expanduser(p), 'rb') as fh:
+            if any(c in DASHES for c in fh.read().decode('utf-8', 'ignore')):
                 print('the file ' + p); sys.exit(0)
     except OSError:
         pass
