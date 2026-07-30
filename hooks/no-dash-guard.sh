@@ -41,21 +41,27 @@ done < <(printf '%s' "$CMD" | grep -oE -- '(--body-file|--input|--file|-F)[= ]+[
            | sed -E 's/^(--body-file|--input|--file|-F)[= ]+//; s/^"//; s/"$//')
 
 # Reliable Unicode check (bash/BSD-grep can't match multibyte classes portably).
-# Read the command text from the environment as raw bytes via os.environb and
-# decode UTF-8 ourselves: os.environ (str) decoding depends on the CI or shell
-# locale, so a C/POSIX runner mangles the multibyte dash bytes and the guard
-# would fail open. environb is byte-exact on POSIX; os.environ is only a fallback.
-# Body/message files are read in binary for the same reason. Dash code points are
-# written as escapes so this file stays ASCII: U+2012 figure, U+2013 en, U+2014
-# em, U+2015 horizontal bar.
-found="$(CMD_TEXT="$CMD" python3 - "${files[@]}" <<'PY'
-import os, sys
+# Detection runs in python on the RAW hook payload, passed byte-exact through the
+# environment via os.environb, and NOT on jq's extracted string: some jq builds
+# under a C/POSIX CI locale do not emit multibyte UTF-8 cleanly, dropping the dash
+# and failing the guard open. python's json parser is locale-independent, so we
+# re-extract .tool_input.command here. jq/$CMD above stay for ASCII-only work
+# (the posting gate and file collection), which the dash bytes never affect.
+# Dash code points are written as escapes so this file stays ASCII:
+# U+2012 figure, U+2013 en, U+2014 em, U+2015 horizontal bar.
+found="$(HI_JSON="$HOOK_INPUT" python3 - "${files[@]}" <<'PY'
+import os, sys, json
 DASHES = {'\u2012', '\u2013', '\u2014', '\u2015'}
 if hasattr(os, 'environb'):
-    raw = os.environb.get(b'CMD_TEXT', b'')
+    raw = os.environb.get(b'HI_JSON', b'')
 else:
-    raw = os.environ.get('CMD_TEXT', '').encode('utf-8', 'surrogateescape')
-if any(c in DASHES for c in raw.decode('utf-8', 'ignore')):
+    raw = os.environ.get('HI_JSON', '').encode('utf-8', 'surrogateescape')
+text = raw.decode('utf-8', 'ignore')
+try:
+    cmd = (json.loads(text).get('tool_input') or {}).get('command') or ''
+except Exception:
+    cmd = text  # unparseable payload: scan the whole thing rather than miss a dash
+if any(c in DASHES for c in cmd):
     print('the command text'); sys.exit(0)
 for p in sys.argv[1:]:
     try:
