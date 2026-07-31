@@ -22,11 +22,13 @@ This command is built to run in an isolated subagent (`context: fork`) so the di
 
 ## Argument flags
 
-Parse these from `$ARGUMENTS`. Each bash block below runs in its **own shell**, so a variable set in one step is NOT visible in a later one. Apply each flag inside the step that uses it, not once "up front":
+Parse these from `$ARGUMENTS` **once**, in Step 1, and persist them to `$PR_TMP/args.env`. Every later step `source`s that file instead of re-deriving flag values from `$ARGUMENTS` by hand.
 
-- `--ready` → open the PR ready for review instead of a draft. Applied in **Step 7**, where the bash block derives `DRAFT_ARG` from `$ARGUMENTS` on its own, so no manual edit is needed.
-- `--base <branch>` → override the base branch. Applied in **Step 1**: set `BASE_ARG="<branch>"` at the top of that block.
-- `--ticket <ID>` → force the ticket, skipping branch auto-detect (`none` omits the line). Applied in **Step 4**: set `TICKET_ARG="<ID>"` at the top of that block.
+> **Why persisted to a file, not re-parsed per step:** each bash block runs in its own shell, so nothing set inline in one block reliably survives to the next (the Bash tool keeps the working directory but not shell state). An earlier version of this command told each step to "set FOO_ARG at the top of that block" from memory of `$ARGUMENTS`; in practice `--base` was silently dropped that way, three times in a row, and every PR opened against the repo default instead of the stacked branch it was pointed at. A file on disk survives regardless of how the executing agent batches its tool calls; re-deriving a value from a natural-language instruction each step does not.
+
+- `--ready` → open the PR ready for review instead of a draft. Parsed into `READY_FLAG` in Step 1.
+- `--base <branch>` → override the base branch. Parsed into `BASE_ARG` in Step 1.
+- `--ticket <ID>` → force the ticket, skipping branch auto-detect (`none` omits the line). Parsed into `TICKET_ARG` in Step 1.
 - `--help` → print the usage block above and stop.
 
 There is no confirmation flag or gate: the command always runs end to end, auto-detecting base and ticket, then pushing and creating.
@@ -49,7 +51,9 @@ Invoke both via the Skill tool before writing any prose:
 
 The PR title and body are read by another engineer, so they use the humane `writing-style` register (warm, contractions, active voice), NOT the terse operator voice. Where they conflict, `writing-style` wins for anything posted to GitHub.
 
-## Step 1: Establish context and resolve the base branch
+## Step 1: Parse flags, establish context, resolve the base branch
+
+First, establish `CURRENT_BRANCH` and `PR_TMP` (needed before anything else can be persisted), and stop early if a PR already exists:
 
 ```bash
 set -euo pipefail
@@ -57,30 +61,11 @@ set -euo pipefail
 CURRENT_BRANCH=$(git branch --show-current)
 if [ -z "$CURRENT_BRANCH" ]; then echo "ERROR: detached HEAD; checkout a branch first"; exit 1; fi
 
-# Resolve base: flag > repo default (gh) > git symbolic-ref > main
-if [ -n "${BASE_ARG:-}" ]; then
-  BASE_BRANCH="$BASE_ARG"
-else
-  BASE_BRANCH=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null \
-    || git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' \
-    || echo main)
-fi
-
-if [ "$CURRENT_BRANCH" = "$BASE_BRANCH" ]; then
-  echo "ERROR: on the base branch ($BASE_BRANCH); create a feature branch first"; exit 1
-fi
-
-git fetch origin "$BASE_BRANCH" --quiet 2>/dev/null || true
-
 PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
 mkdir -p "$PR_TMP"
-echo "Branch: $CURRENT_BRANCH -> $BASE_BRANCH"
+echo "Branch: $CURRENT_BRANCH"
 echo "TMP: $PR_TMP"
-```
 
-Then check for an existing PR. If one exists, stop and report its URL:
-
-```bash
 EXISTING=$(gh pr view "$CURRENT_BRANCH" --json url,state -q 'select(.state=="OPEN") | .url' 2>/dev/null || true)
 if [ -n "$EXISTING" ]; then
   echo "A PR already exists: $EXISTING"
@@ -89,9 +74,60 @@ if [ -n "$EXISTING" ]; then
 fi
 ```
 
+Now parse **every** flag out of `$ARGUMENTS` in a single pass and write them to `$PR_TMP/args.env`. This is the only place flags are parsed from `$ARGUMENTS`; every later step sources this file instead of re-deriving flag values by hand:
+
+```bash
+cat > "$PR_TMP/args.env" << 'ARGS_EOF'
+BASE_ARG=""
+TICKET_ARG=""
+READY_FLAG=""
+ARGS_EOF
+```
+
+**MUST:** immediately re-open `$PR_TMP/args.env` with the Edit tool and fill in the real values by reading `$ARGUMENTS` carefully:
+- if `$ARGUMENTS` contains `--base <branch>`, set `BASE_ARG="<branch>"` (the exact branch name, verbatim, nothing else on that line).
+- if `$ARGUMENTS` contains `--ticket <ID>`, set `TICKET_ARG="<ID>"`.
+- if `$ARGUMENTS` contains `--ready`, set `READY_FLAG="--ready"`.
+- leave any flag that is not present as `""`. Do not guess a value that was not actually passed.
+
+Then resolve the base branch from the persisted flag and verify what was parsed before moving on:
+
+```bash
+source "$PR_TMP/args.env"
+echo "parsed: BASE_ARG='${BASE_ARG}' TICKET_ARG='${TICKET_ARG}' READY_FLAG='${READY_FLAG}'"
+
+# Resolve base: flag > repo default (gh) > git symbolic-ref > main
+if [ -n "$BASE_ARG" ]; then
+  BASE_BRANCH="$BASE_ARG"
+  BASE_SOURCE="--base flag"
+else
+  BASE_BRANCH=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null \
+    || git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' \
+    || echo main)
+  BASE_SOURCE="repo default"
+fi
+echo "BASE_BRANCH=$BASE_BRANCH" >> "$PR_TMP/args.env"
+
+if [ "$CURRENT_BRANCH" = "$BASE_BRANCH" ]; then
+  echo "ERROR: on the base branch ($BASE_BRANCH); create a feature branch first"; exit 1
+fi
+
+git fetch origin "$BASE_BRANCH" --quiet 2>/dev/null || true
+echo "Resolved base: $BASE_BRANCH (source: $BASE_SOURCE)"
+```
+
+**Before continuing to Step 2, sanity-check the echoed base against the actual request.** If `--base` appeared in `$ARGUMENTS` but `BASE_SOURCE` printed as "repo default", the edit to `args.env` was missed or wrong; fix `$PR_TMP/args.env` now and re-run the block above before proceeding. This is the exact failure mode the file-persistence design in this step exists to catch: silently opening a PR against the wrong base is a correctness bug, not a style nit, especially for stacked PRs where the base is load-bearing.
+
 ## Step 2: Pre-flight checks (engineering-standards)
 
 ```bash
+# Fresh shell: re-derive PR_TMP the same way Step 1 did, then source the
+# flags Step 1 persisted (BASE_BRANCH included) instead of assuming they
+# survived from the previous block.
+CURRENT_BRANCH=$(git branch --show-current)
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+source "$PR_TMP/args.env"
+
 # Commits ahead of base
 AHEAD=$(git rev-list --count "origin/$BASE_BRANCH..HEAD" 2>/dev/null || echo 0)
 # Size (additions + deletions)
@@ -125,6 +161,10 @@ Report the readiness picture in one short block. The two hard stops (`AHEAD` = 0
 ## Step 3: Gather the diff and commit history
 
 ```bash
+CURRENT_BRANCH=$(git branch --show-current)
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+source "$PR_TMP/args.env"
+
 echo "=== diff stat ==="
 git diff --stat "origin/$BASE_BRANCH...HEAD"
 echo "=== commit log ==="
@@ -138,7 +178,11 @@ Read `$PR_TMP/pr-diff.txt` with the Read tool. This is the source of truth for t
 ## Step 4: Detect the ticket (optional)
 
 ```bash
-if [ -n "${TICKET_ARG:-}" ]; then
+CURRENT_BRANCH=$(git branch --show-current)
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+source "$PR_TMP/args.env"
+
+if [ -n "$TICKET_ARG" ]; then
   TICKET="$TICKET_ARG"   # may be the literal "none"
 else
   # First PROJECT-1234 style token in the branch name
@@ -198,6 +242,9 @@ Rules for filling it:
 Write the finished body to a file:
 
 ```bash
+CURRENT_BRANCH=$(git branch --show-current)
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+
 cat > "$PR_TMP/pr-body.md" << 'PRBODY_EOF'
 <the filled template goes here>
 PRBODY_EOF
@@ -206,9 +253,13 @@ echo "Body written: $PR_TMP/pr-body.md"
 
 ## Step 7: Push and create
 
-The PR opens as a **draft** unless `--ready` was passed. The block below derives `DRAFT_ARG` from `$ARGUMENTS` itself, so there is nothing to edit by hand: `--draft` when `--ready` is absent, empty when it is present.
+The PR opens as a **draft** unless `--ready` was passed. `READY_FLAG` came from `$PR_TMP/args.env` (parsed once, in Step 1); this step only translates it into the flag `gh pr create` expects, it does not re-parse `$ARGUMENTS`.
 
 ```bash
+CURRENT_BRANCH=$(git branch --show-current)
+PR_TMP="/tmp/create-pr/$(basename "$(git rev-parse --show-toplevel)")/$(echo "$CURRENT_BRANCH" | tr '/' '-')"
+source "$PR_TMP/args.env"
+
 # Hard limit: PR title is at most 72 characters (whole line, prefix included).
 TITLE_LEN=$(printf '%s' "$TITLE" | wc -m | tr -d ' ')
 if [ "$TITLE_LEN" -gt 72 ]; then
@@ -216,9 +267,11 @@ if [ "$TITLE_LEN" -gt 72 ]; then
   exit 1
 fi
 
-# Draft by default; --ready publishes for review. Derived straight from the invocation args.
+# Draft by default; --ready (READY_FLAG, from args.env) publishes for review.
 DRAFT_ARG="--draft"
-case " $ARGUMENTS " in *" --ready "*) DRAFT_ARG="" ;; esac
+[ -n "$READY_FLAG" ] && DRAFT_ARG=""
+
+echo "Creating PR: $CURRENT_BRANCH -> $BASE_BRANCH (draft: $([ -n "$DRAFT_ARG" ] && echo yes || echo no))"
 
 git push -u origin "HEAD:refs/heads/$CURRENT_BRANCH"
 
@@ -228,6 +281,8 @@ gh pr create \
   --base "$BASE_BRANCH" \
   $DRAFT_ARG
 ```
+
+**Verify after creation, do not trust the command's own success message:** run `gh pr view "$CURRENT_BRANCH" --json baseRefName,headRefName -q '{base:.baseRefName,head:.headRefName}'` and confirm `base` matches the `BASE_BRANCH` resolved in Step 1. If it does not, the PR was opened against the wrong base; fix it immediately with `gh pr edit "$CURRENT_BRANCH" --base "$BASE_BRANCH"` before reporting success in Step 8.
 
 ## Step 8: Report
 
