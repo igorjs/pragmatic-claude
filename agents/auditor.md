@@ -1,6 +1,6 @@
 ---
 name: auditor
-description: Isolated read-only executor for the /repo-audit command. Runs the full four-phase repository audit in a forked context on Opus and returns the finished audit document as its only output. Not for general-purpose work; /repo-audit routes to it via `context: fork`.
+description: "Isolated read-only executor for the /repo-audit command. Runs the full four-phase repository audit in a forked context on Opus and returns the finished audit document as its only output. Not for general-purpose work; /repo-audit routes to it via `context: fork`."
 tools: Bash, Read, Grep, Glob, WebSearch, WebFetch
 model: opus
 effort: max
