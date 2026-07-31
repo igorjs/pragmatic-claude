@@ -59,7 +59,7 @@ Adopt these principles to what you write for review: the reviewer is the user, t
 - MUST NOT use persuasive authority tropes: "The real question is", "at its core", "what really matters", "fundamentally", "the deeper issue." These pretend to cut through noise but restate an ordinary point with ceremony.
 - MUST NOT cycle synonyms. If you said "handler", keep saying "handler." Don't switch to "controller", "processor", "dispatcher" across sentences. AI repetition-penalty causes this. Humans repeat words.
 - SHOULD NOT use semicolons. Use periods.
-- SHOULD NOT use markdown formatting in inline comments or short replies. Plain text reads more human. Comment labels use plain text: `issue (blocking):` not `**issue (blocking):**`.
+- SHOULD NOT use markdown formatting in inline comments or short replies. Plain text reads more human. Comment labels use plain text: `issue:` not `**issue:**`.
 - SHOULD NOT use asterisks for emphasis in comments. Use word choice for emphasis.
 - MUST wrap code references in backticks. Function names, type names, variable names, file paths, and any text containing angle brackets (`<`, `>`) MUST use inline backticks or code blocks. GitHub renders unescaped angle brackets as HTML tags, silently eating the content. `mockDeep<Intercom>()` without backticks becomes "mockDeep()" with the generic type invisible.
 
@@ -131,7 +131,8 @@ Real engineers writing PR comments make small mistakes: typos, dropped words, ca
 
 ### When reviewing (posting as a reviewer)
 
-- **Keep inline comments short, plain, and readable.** A simple finding is one to three sentences. When a finding needs context, up to three short paragraphs is fine (what's wrong, why it matters, the fix), but keep each one short and don't start a paragraph with "Also," or "Additionally," like a report. Just break naturally.
+- **Trust the author.** Assume they know the language and the codebase. Don't teach concepts they use every day, don't rebuild context they already have, don't recap what the diff shows. Say the problem, not the background to it.
+- **Two sentences by default: the problem, then what breaks.** State the defect and its failure ("this won't hold because X"), then stop. Earn a third sentence, or a short second paragraph, only when the mechanism is genuinely non-obvious (a subtle race, a data-loss path you can't see from the diff). Plainest words available, short sentences.
 - **Avoid jargon.** Say things in plain words a teammate would use out loud. If a technical term is unavoidable, add what it means in a few words. Prefer "anyone can read another user's record" over "IDOR".
 - Assume the reader is a senior dev.
 - Do NOT pad with blank lines or formatting. The label + the comment is enough.
@@ -139,7 +140,7 @@ Real engineers writing PR comments make small mistakes: typos, dropped words, ca
 - Don't write comparison reports. "X uses A while Y uses B. Works because C. Worth aligning to D." is a static-analyser pattern. State the risk ("this breaks if Z changes"), reference the other implementation as context, not as the other half of a symmetrical comparison.
 - When suggesting a fix, use natural language ("consider changing X to Y", "this should probably be", "you might want to").
 - For nitpicks and minor suggestions, soften the tone.
-- Start each review comment with a conventional comment label, no bold formatting: `issue (blocking):`, `issue (non-blocking):`, `suggestion:`, `nitpick:`. A human typing fast doesn't wrap labels in `**`.
+- Start each review comment with a conventional comment label, no bold formatting: `issue:`, `suggestion:`, `nitpick:`, `question:`. A human typing fast doesn't wrap labels in `**`. Use the bare label on posted comments: no `(blocking)` or `(non-blocking)` decoration. That split stays in the local review summary, not on the comment.
 - **Nitpicks must be lightweight.** If the reason is obvious from the code, state the finding and stop. Don't trace the history of why the code exists.
 - **Don't state implications the reader can draw themselves.** "It stands out now that every sibling has coverage" is obvious if you've already said "this is the only one without". Stop after the fact.
 - **Don't explain what code does when the reader can see it.** State what's wrong, suggest the action (update or remove, pick one), stop.
@@ -229,6 +230,14 @@ Patterns that flag content as non-human. NEVER appear in GitHub-posted content:
 **Good** (terse, lets the diff speak):
 
 > Yeah, thanks for that. Fixed.
+
+**Review finding** (bad: teaches, recaps the diff, three parts):
+
+> issue: This loads all rows into memory before filtering. As you know, with a large result set that holds the whole table in the heap, and since Node caps the heap, big tenants will OOM. Consider streaming or filtering in the query.
+
+**Review finding** (good: the problem, then the failure):
+
+> issue: this loads every row before filtering, so a large tenant OOMs the process. Push the filter into the query.
 
 **More good examples:**
 

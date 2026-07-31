@@ -79,7 +79,7 @@ EXAMPLES:
 
 ## Voice rules
 
-Invoke the `grounding-review` and `writing-style` skills before drafting any finding (same discipline as `/quick-review`). Non-negotiables for anything posted to GitHub: Conventional Comments label + decoration in **plain text** (`issue (blocking):`, `suggestion:`, `nitpick:`, never bold); plain, jargon-free language; findings kept short (one to two sentences when simple, up to three short paragraphs when a finding needs context); one pragmatic fix, not a menu; no hedging; no meta-justification; no em or en dashes.
+Invoke the `grounding-review` and `writing-style` skills before drafting any finding (same discipline as `/quick-review`). Non-negotiables for anything posted to GitHub: Conventional Comments label in **plain text** and bare (`issue:`, `suggestion:`, `nitpick:`, `question:`, never bold, no `(blocking)`/`(non-blocking)` decoration on the posted body; that split stays in the local summary); plain, jargon-free language; findings kept short (two sentences by default, the problem then what breaks, a third only when the mechanism is non-obvious); one pragmatic fix, not a menu; no hedging; no meta-justification; no em or en dashes.
 
 ## Step 1: Resolve PR and gather context
 
@@ -194,7 +194,7 @@ Instruct each to:
 
 ```json
 {"file": "...", "line": N, "side": "RIGHT", "label": "issue", "decoration": "blocking",
- "category": "security", "confidence": "HIGH", "evidence": "<exact code>", "body": "<short plain finding; 1-2 sentences, up to 3 short paragraphs if it needs context>"}
+ "category": "security", "confidence": "HIGH", "evidence": "<exact code>", "body": "<short plain finding; the problem then what breaks, 2 sentences by default, a third only when the mechanism is non-obvious>"}
 ```
 
 Collect every reviewer's JSON. If a reviewer returns nothing, record it ran with zero findings (not a failure).
@@ -224,7 +224,7 @@ If `--self` (or self-review with nothing postable), stop here: the report IS the
 Otherwise ask **one question at a time**:
 
 - **Q1:** "Post which findings as a pending review? all / none / a subset (numbers)." If `none`, stop.
-- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text Conventional Comment label, no review `body`). Build each inline comment's `body` from that finding's `Post:` block verbatim, anchored to the finding's `file:line`. What the user read in the report is exactly what posts. Skip any finding marked `Report-only`. Then create the pending review:
+- Build the payload at `$REVIEW_JSON` (`{"commit_id": "<HEAD_SHA>", "comments": [{"path","line","side","body"}, ...]}`, body starting with the plain-text bare Conventional Comment label (`issue:`, no `(blocking)`/`(non-blocking)` decoration), no review `body`). Build each inline comment's `body` from that finding's `Post:` block verbatim, anchored to the finding's `file:line`. What the user read in the report is exactly what posts. Skip any finding marked `Report-only`. Then create the pending review:
 
 ```bash
 gh api -X POST /repos/$REPO/pulls/$PR_NUMBER/reviews --input "$REVIEW_JSON" --jq '{id, state, html_url}'

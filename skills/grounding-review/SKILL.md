@@ -81,15 +81,15 @@ N. <label> (<decoration>): <one-line subject naming the consequence>
    <1 to 2 sentence body: the problem and the real-world consequence>
    Post:
    ```text
-   <label> (<decoration>): <exact GitHub comment body, 1 to 2 sentences>
+   <label>: <exact GitHub comment body, 1 to 2 sentences>
    ```
 ```
 
-- Labels: `issue`, `suggestion`, `question`, `nitpick`. Decorations: `(blocking)`, `(non-blocking)`.
+- Labels: `issue`, `suggestion`, `question`, `nitpick`. Decorations `(blocking)`/`(non-blocking)` mark `issue` findings in the report only: they set the finding order (line 67) and the report subject (line 79). Posted comments drop the decoration and start with the bare label, e.g. `issue:`.
 - Subject names the consequence, not a rule: "user input runs as SQL", not "SQL injection".
 - Location line: `` `file:line` `` then category (security, logic, perf, tests, types, data, maintainability, and so on) then confidence, `·`-separated.
 - Body: 1 to 2 sentences. The why is part of the sentence, not a separate paragraph. No bullet lists inside a finding.
-- `Post:` block: the exact comment that goes to GitHub. Plain text, label in plain text never `**bold**`, 1 to 2 sentences, no `file:line` prefix (GitHub anchors it). It MAY contain a ```suggestion``` block when the fix is mechanical. The posting step sends this block verbatim as the comment body.
+- `Post:` block: the exact comment that goes to GitHub. Plain text, bare label never `**bold**` and never decorated (`issue:`, not `issue (blocking):`; the blocking split lives in the report subject on line 79, not the posted body), 1 to 2 sentences, no `file:line` prefix (GitHub anchors it). It MAY contain a ```suggestion``` block when the fix is mechanical. The posting step sends this block verbatim as the comment body.
 - Report-only finding (evidence not on a changed diff line, so no inline anchor): omit the `Post:` block and end with `Report-only: not on a changed line, no inline draft.`
 
 ## Severity
