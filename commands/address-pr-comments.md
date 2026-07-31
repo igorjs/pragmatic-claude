@@ -43,7 +43,7 @@ Replies must read like a human typed them quickly in a code-review thread.
 - **Match the reviewer's register.** Casual gets casual, formal gets formal. Australian slang is fine sparingly ("should be sweet", "too easy", "reckon that's fine").
 - **No commit hashes in the reply text.** Humans don't write "fixed in abc1234" in conversation. Say "fixed in the latest push" instead. GitHub auto-renders the SHA when the reply lands.
 - **No em or en dashes.** Hard rule. Use commas, colons, parentheses, or separate sentences.
-- **No markdown emphasis in inline comments.** Plain text reads more human. `issue (blocking):` not `**issue (blocking):**`.
+- **No markdown emphasis in inline comments.** Plain text reads more human. `issue:` not `**issue:**`.
 
 Banned words in replies (LLM vocabulary tells): `utilize`, `however`, `furthermore`, `moreover`, `hence`, `certainly`, `basically`, `actually`, `very`, `just`, `really`, `probably`, `delve`, `harness`, `pivotal`, `intricate`, `groundbreaking`, `remarkable`, `serves as`, `stands as`, `crucial`, `valuable`, `powerful`. Replace `utilize` with `use`, `however` with `but` (or a new sentence), `furthermore` and `moreover` with `and` (or a new sentence), `hence` with `so`. Drop the rest.
 
