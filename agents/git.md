@@ -1,6 +1,6 @@
 ---
 name: git
-description: Isolated executor for the /commit-and-push and /create-pull-request commands. Delivers signed commits and pull requests end to end in a forked context, on Haiku. Not for general-purpose work; these two commands route to it via `context: fork`.
+description: "Isolated executor for the /commit-and-push and /create-pull-request commands. Delivers signed commits and pull requests end to end in a forked context, on Haiku. Not for general-purpose work; these two commands route to it via `context: fork`."
 tools: Bash, Read, Skill
 model: haiku
 effort: medium
