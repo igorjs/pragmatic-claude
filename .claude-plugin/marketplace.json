@@ -11,8 +11,8 @@
       "name": "pragmatic-claude",
       "description": "A pragmatic Claude Code toolkit: opinionated skills, slash commands, subagents, and safety and state hooks.",
       "source": {
-        "source": "github",
-        "repo": "igorjs/pragmatic-claude"
+        "source": "url",
+        "url": "https://github.com/igorjs/pragmatic-claude.git"
       },
       "category": "workflow",
       "homepage": "https://github.com/igorjs/pragmatic-claude",

@@ -45,6 +45,16 @@ pname="$(jq -r '.name // empty' "$REPO/.claude-plugin/plugin.json")"
 pver="$(jq -r '.version // empty' "$REPO/.claude-plugin/plugin.json")"
 [ -n "$pname" ] && ok "plugin.json name=$pname" || bad "plugin.json missing name"
 [ -n "$pver" ] && ok "plugin.json version=$pver" || bad "plugin.json missing version"
+# Regression guard: the plugin source MUST clone over HTTPS. A {source:github}
+# entry makes `claude plugin install` clone via SSH, which fails for any user
+# without GitHub SSH keys (verified in a clean container). Require url + https.
+stype="$(jq -r '.plugins[0].source.source // (.plugins[0].source|type)' "$REPO/.claude-plugin/marketplace.json")"
+surl="$(jq -r '.plugins[0].source.url // ""' "$REPO/.claude-plugin/marketplace.json")"
+if [ "$stype" = "url" ] && printf '%s' "$surl" | grep -q '^https://'; then
+  ok "plugin source clones over HTTPS (keyless-installable): $surl"
+else
+  bad "plugin source is '$stype' (must be url+https; github source clones via SSH and breaks keyless installs)"
+fi
 
 hdr "C. Hook integrity (every hooks.json command resolves and parses)"
 while IFS= read -r c; do
