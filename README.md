@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/instal
 Interactive by default. It installs the toolkit as a Claude Code plugin (adds the `pragmatic-claude` marketplace, then installs and enables the plugin), wires the always-on safety guards and the other local config, and asks before each optional step (plugin, `brew bundle`, `~/.zshrc`). It downloads the latest release (or `main` if none exists), backs up anything it replaces to `~/.claude/backups/`, and opens a fresh shell. Pass `--yes` to accept every default without prompting. Pin a version or install files only:
 
 ```bash
-PRAGMATIC_CLAUDE_REF=v0.7.0 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
+PRAGMATIC_CLAUDE_REF=v0.1.0 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash -s -- --no-setup
 ```
 
