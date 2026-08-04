@@ -9,7 +9,7 @@ Universal writing rules for all generated content intended for human readers: PR
 
 These rules are MUST-level unless marked SHOULD.
 
-> **GOLDEN RULE:** MUST NEVER use em dashes (—) or en dashes (–) in any output. This applies to every file, comment, commit message, and generated text. Use commas, colons, or periods. Both dash types are strong AI tells.
+> **IRON RULE:** MUST NEVER use em dashes or en dashes in any output, and MUST write in simple, plain English (common words, short sentences). This applies to every file, comment, commit message, and generated text. Use commas, colons, or periods instead of dashes. Both dash types are strong AI tells; fancy vocabulary and long sentences are too.
 
 ## Reviewer usability (adapted from "Don't Make Me Think")
 
