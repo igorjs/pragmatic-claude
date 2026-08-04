@@ -125,7 +125,7 @@ scenario_basic() {
 
     create_shipped "$ch"
     create_runtime "$ch"
-    write_zshrc_block "$h/.zshrc" "# pragmatic-claude launchers (cc/ccd)"
+    write_zshrc_block "$h/.zshrc" "# playbook launchers (cc/ccd)"
     local orig_lines
     orig_lines=$(wc -l < "$h/.zshrc" | tr -d ' ')
 

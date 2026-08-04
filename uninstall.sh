@@ -165,9 +165,8 @@ if [ -f "$ZSHRC" ] && grep -qF 'shell/cc.zsh' "$ZSHRC"; then
     cp "$ZSHRC" "${ZSHRC}.bak-${STAMP}"
     ZSHRC_TMP="$(mktemp "${HOME}/.zshrc.tmp.XXXXXX")"
     # Drop the source line and absorb the preceding launchers comment of
-    # any variant (# claude-config launchers (cc/ccd),
-    # # pragmatic-claude launchers (cc/ccd), or # playbook launchers (cc/ccd)).
-    # Only removes a comment when it
+    # any variant (matches "launchers (cc/ccd)" broadly so it handles all
+    # historical and current comment forms).  Only removes a comment when it
     # both matches launchers (cc/ccd) AND is immediately followed by the
     # source line.  Handles multiple occurrences and the no-comment case.
     # A second awk pass squeezes any resulting doubled blank line.
