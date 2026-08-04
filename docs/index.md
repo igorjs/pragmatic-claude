@@ -1,4 +1,4 @@
-# pragmatic-claude docs
+# Playbook docs
 
 How to use and extend this Claude Code config. The [README](../README.md) covers install plus a short summary of every command and skill. These pages go deeper: why the config is shaped the way it is, real workflows end to end, how to add your own pieces, and how the machine works underneath.
 

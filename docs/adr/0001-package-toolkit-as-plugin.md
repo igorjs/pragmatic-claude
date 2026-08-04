@@ -11,7 +11,7 @@ Claude Code already has a first class plugin system, and this machine uses it (t
 
 ## Decision
 
-Ship the whole toolkit as a single plugin named `pragmatic-claude`, distributed through a one plugin marketplace in this same repo. Keep per feature opt-out on the existing environment variables rather than splitting into multiple plugins.
+Ship the whole toolkit as a single plugin named `playbook`, distributed through a one plugin marketplace (now in the separate `pragmatic-engineer/marketplace` repo). Keep per feature opt-out on the existing environment variables rather than splitting into multiple plugins.
 
 Rationale for one plugin (not modular): the skills, commands, agents, and hooks are cross referential (commands spawn the agents, hooks feed the memory the skills rely on). A single enable or disable is the simplest mental model, and the environment gates already give finer control without the maintenance cost of several manifests and cross plugin dependencies.
 
@@ -21,7 +21,7 @@ This PR delivers the design and a working, installable scaffold. It does not yet
 
 Added:
 - `.claude-plugin/plugin.json`: the plugin manifest (metadata only; components are auto discovered from the standard subdirs).
-- `.claude-plugin/marketplace.json`: a marketplace listing this plugin, sourced from GitHub `igorjs/pragmatic-claude`.
+- `.claude-plugin/marketplace.json`: a marketplace listing this plugin, sourced from GitHub `pragmatic-engineer/playbook`.
 - `hooks/hooks.json`: the plugin hook wiring, a faithful translation of the current `settings.shared.json` hooks with paths rewritten to `${CLAUDE_PLUGIN_ROOT}`.
 
 Deliberately deferred to a follow up (see Migration): removing the `hooks` block from `settings.shared.json`, teaching `shell/gen-shared-settings.sh` to strip it, and enabling the plugin by default. Because the plugin is not added to `enabledPlugins` here, nothing double fires until a user opts in.
@@ -61,8 +61,8 @@ To make the plugin the canonical delivery and avoid double firing for anyone who
 
 1. Remove the `hooks` block from `settings.shared.json`; keep `permissions`, `env`, `statusLine`, and `enabledPlugins`.
 2. Update `shell/gen-shared-settings.sh` to `del(.hooks)` when generating the seed (so regenerating from a personal `settings.json`, which still holds `rtk` and local wiring, never reintroduces hooks), and update its paired tests.
-3. Add `"pragmatic-claude@pragmatic-claude": true` to the seed's `enabledPlugins` so fresh installs enable the plugin.
-4. Document the adoption path in the README: `/plugin marketplace add igorjs/pragmatic-claude`, then `/plugin install pragmatic-claude@pragmatic-claude`, then remove any legacy `~/.claude/hooks/*` wiring from a personal `settings.json` to avoid double firing.
+3. Add `"playbook@pragmatic-engineer": true` to the seed's `enabledPlugins` so fresh installs enable the plugin.
+4. Document the adoption path in the README: `/plugin marketplace add pragmatic-engineer/marketplace`, then `/plugin install playbook@pragmatic-engineer`, then remove any legacy `~/.claude/hooks/*` wiring from a personal `settings.json` to avoid double firing.
 5. Update the `settings-distribution-model` memory fact to record that hook wiring now ships through the plugin, not the seed.
 
 Existing users are not clobbered: `install.sh` seeds `settings.json` only when absent, so removing hooks from the seed does not retroactively unwire anyone; it only changes what a fresh install applies.

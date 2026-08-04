@@ -1,4 +1,4 @@
-# Contributing to pragmatic-claude
+# Contributing to Playbook
 
 This project follows the standard igorjs contribution rules. Start here:
 
