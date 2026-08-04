@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 #
 # install-seed.test.sh: hermetic tests for install.sh's settings.json handling.
-# Exercises the PRAGMATIC_CLAUDE_SRC local-source seam (no network) to cover the
+# Exercises the PLAYBOOK_SRC local-source seam (no network) to cover the
 # first-install seed of settings.json from settings.shared.json, preservation of
 # a pre-existing settings.json, the no-template no-op, and the copy-loop skip
 # that keeps a shipped settings.json from clobbering the seeded default.
@@ -31,7 +31,7 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 # the network path and --no-setup skips brew/zshrc/shell-reload.
 run_install() {
   local src="$1" home="$2"
-  PRAGMATIC_CLAUDE_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
+  PLAYBOOK_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
     bash "$INSTALL" --no-setup >/dev/null 2>&1
 }
 
@@ -117,7 +117,7 @@ MERGE="${SCRIPT_DIR}/merge-settings.sh"
 # Sets _INSTALL_RC and _INSTALL_ERR_FILE.
 run_install_full() {
   local src="$1" home="$2" errfile="$3"
-  PRAGMATIC_CLAUDE_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
+  PLAYBOOK_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
     bash "$INSTALL" --no-setup >/dev/null 2>"$errfile"
   _INSTALL_RC=$?
 }
