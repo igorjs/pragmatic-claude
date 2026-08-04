@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# plugin-e2e.sh: end-to-end verification of the pragmatic-claude plugin and
+# plugin-e2e.sh: end-to-end verification of the playbook plugin and
 # installer. Proves the "add the plugin and it just works" path in a clean-slate
 # config (an isolated CLAUDE_CONFIG_DIR) and exercises install.sh into a throwaway
 # HOME. Not a CI unit (needs the claude CLI and is slow); run it by hand:
@@ -24,11 +24,7 @@ command -v claude >/dev/null 2>&1 || { echo "claude CLI not found on PATH" >&2; 
 command -v jq >/dev/null 2>&1 || { echo "jq not found on PATH" >&2; exit 2; }
 
 hdr "A. Manifest validation (claude plugin validate --strict)"
-if claude plugin validate "$REPO" --strict >/dev/null 2>&1; then
-  ok "marketplace manifest validates (strict)"
-else
-  bad "marketplace manifest validate --strict"
-fi
+[ ! -f "$REPO/.claude-plugin/marketplace.json" ] && ok "marketplace.json not in plugin repo" || bad "marketplace.json still in plugin repo"
 if claude plugin validate "$REPO/.claude-plugin/plugin.json" --strict >/dev/null 2>&1; then
   ok "plugin manifest and all bundled components validate (strict)"
 else
@@ -38,23 +34,13 @@ else
 fi
 
 hdr "B. JSON well-formedness and required plugin.json fields"
-for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
+for f in .claude-plugin/plugin.json hooks/hooks.json; do
   if jq empty "$REPO/$f" 2>/dev/null; then ok "$f is valid JSON"; else bad "$f invalid JSON"; fi
 done
 pname="$(jq -r '.name // empty' "$REPO/.claude-plugin/plugin.json")"
 pver="$(jq -r '.version // empty' "$REPO/.claude-plugin/plugin.json")"
 [ -n "$pname" ] && ok "plugin.json name=$pname" || bad "plugin.json missing name"
 [ -n "$pver" ] && ok "plugin.json version=$pver" || bad "plugin.json missing version"
-# Regression guard: the plugin source MUST clone over HTTPS. A {source:github}
-# entry makes `claude plugin install` clone via SSH, which fails for any user
-# without GitHub SSH keys (verified in a clean container). Require url + https.
-stype="$(jq -r '.plugins[0].source.source // (.plugins[0].source|type)' "$REPO/.claude-plugin/marketplace.json")"
-surl="$(jq -r '.plugins[0].source.url // ""' "$REPO/.claude-plugin/marketplace.json")"
-if [ "$stype" = "url" ] && printf '%s' "$surl" | grep -q '^https://'; then
-  ok "plugin source clones over HTTPS (keyless-installable): $surl"
-else
-  bad "plugin source is '$stype' (must be url+https; github source clones via SSH and breaks keyless installs)"
-fi
 
 hdr "C. Hook integrity (every hooks.json command resolves and parses)"
 while IFS= read -r c; do
@@ -81,12 +67,14 @@ BASE="$(mktemp -d)"; L="$BASE/plugin"; mkdir -p "$L/.claude-plugin"
 if ! ( cd "$REPO" && git archive --format=tar HEAD 2>/dev/null | tar -x -C "$L" ); then
   cp -R "$REPO"/commands "$REPO"/skills "$REPO"/agents "$REPO"/hooks "$REPO"/.claude-plugin "$L/" 2>/dev/null
 fi
-jq '.plugins[0].source = "./"' "$REPO/.claude-plugin/marketplace.json" > "$L/.claude-plugin/marketplace.json"
+[ -f "$L/.claude-plugin/plugin.json" ] || bad "archive missing .claude-plugin/plugin.json"
+jq -n '{name:"e2e-local",owner:{name:"e2e",email:"e2e@localhost"},plugins:[{name:"playbook",source:"./"}]}' > "$L/.claude-plugin/marketplace.json"
 export CLAUDE_CONFIG_DIR="$BASE/cfg"
 claude plugin marketplace add "$L" </dev/null >/dev/null 2>&1 && ok "marketplace add (clean config)" || bad "marketplace add"
-claude plugin install "pragmatic-claude@pragmatic-claude" </dev/null >/dev/null 2>&1 && ok "plugin install" || bad "plugin install"
-det="$(claude plugin details pragmatic-claude 2>/dev/null)"
+claude plugin install "playbook@e2e-local" </dev/null >/dev/null 2>&1 && ok "plugin install" || bad "plugin install"
+det="$(claude plugin details playbook 2>/dev/null)"
 claude plugin list 2>/dev/null | grep -q 'enabled' && ok "plugin shows enabled" || bad "plugin not enabled"
+printf '%s' "$det" | grep -q 'playbook' && ok "details contain playbook" || bad "details missing playbook"
 ag="$(echo "$det" | awk -F'[()]' '/Agents \(/{print $2}')"
 hk="$(echo "$det" | awk -F'[()]' '/Hooks \(/{print $2}')"
 [ "${ag:-0}" = "3" ] && ok "inventory Agents=3" || bad "inventory Agents=$ag (expected 3)"
@@ -99,7 +87,7 @@ rm -rf "$BASE"
 
 hdr "F. install.sh into a throwaway HOME (files, settings seed, guard wiring)"
 TH="$(mktemp -d)"; CH="$TH/.claude"
-HOME="$TH" CLAUDE_HOME="$CH" PRAGMATIC_CLAUDE_SRC="$REPO" \
+HOME="$TH" CLAUDE_HOME="$CH" PLAYBOOK_SRC="$REPO" \
   bash "$REPO/install.sh" --no-setup --yes >"$TH/install.log" 2>&1
 rc=$?
 [ "$rc" -eq 0 ] && ok "install.sh --no-setup --yes exits 0" || bad "install.sh exit=$rc"

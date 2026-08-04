@@ -6,7 +6,7 @@
 
 To report a vulnerability, use one of:
 
-- **GitHub Security Advisories**: [Report a vulnerability](https://github.com/igorjs/pragmatic-claude/security/advisories/new)
+- **GitHub Security Advisories**: [Report a vulnerability](https://github.com/pragmatic-engineer/playbook/security/advisories/new)
 - **Email**: **oss@mail.igorjs.io**
 
 Include:
@@ -29,7 +29,7 @@ If the report is declined (not a vulnerability, or out of scope), you will recei
 
 ## Supported Versions
 
-Security fixes target [the latest released version](https://github.com/igorjs/pragmatic-claude/releases). Earlier versions don't receive patches. Upgrade to the latest release before reporting.
+Security fixes target [the latest released version](https://github.com/pragmatic-engineer/playbook/releases). Earlier versions don't receive patches. Upgrade to the latest release before reporting.
 
 ## Scope
 
@@ -55,7 +55,7 @@ Vulnerabilities in this repository's code, including but not limited to:
 
 ## Hardening posture
 
-This repository is part of the `igorjs` repo set and follows a common
+This repository is part of the `pragmatic-engineer` repo set and follows a common
 hardening posture: ruleset-managed branch and tag protection, signed
 commits, SHA-pinned third-party actions, and an App-based bot identity
 with narrow per-repo scope. For the cross-repo configuration as code,

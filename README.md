@@ -1,8 +1,8 @@
-# pragmatic-claude
+# Playbook
 
 My personal [Claude Code](https://docs.claude.com/en/docs/claude-code) setup: a zsh launcher, session hooks, a custom system prompt, skills, slash commands, and a statusline. It lives at `~/.claude` and replaces the default config directory.
 
-The skills, commands, agents, and functional hooks also ship as an opt-in Claude Code plugin (`pragmatic-claude`). The installer wires it up for you, or you can add it directly with `claude plugin` (see [Just the plugin](#just-the-plugin)). The always-on safety guards stay wired to your `settings.json` so they run regardless of the plugin.
+The skills, commands, agents, and functional hooks also ship as an opt-in Claude Code plugin (`playbook`). The installer wires it up for you, or you can add it directly with `claude plugin` (see [Just the plugin](#just-the-plugin)). The always-on safety guards stay wired to your `settings.json` so they run regardless of the plugin.
 
 ## Requirements
 
@@ -23,17 +23,17 @@ Config lives at `~/.claude` (all paths are hardcoded to `$HOME/.claude`).
 Quickest, no clone:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
 ```
 
-Interactive by default. It installs the toolkit as a Claude Code plugin (adds the `pragmatic-claude` marketplace, then installs and enables the plugin), wires the always-on safety guards and the other local config, and asks before each optional step (plugin, `brew bundle`, `~/.zshrc`). It downloads the latest release (or `main` if none exists), backs up anything it replaces to `~/.claude/backups/`, and opens a fresh shell. Pass `--yes` to accept every default without prompting. Pin a version or install files only:
+Interactive by default. It installs the toolkit as a Claude Code plugin (adds the `pragmatic-engineer/marketplace` marketplace, then installs and enables the plugin), wires the always-on safety guards and the other local config, and asks before each optional step (plugin, `brew bundle`, `~/.zshrc`). It downloads the latest release (or `main` if none exists), backs up anything it replaces to `~/.claude/backups/`, and opens a fresh shell. Pass `--yes` to accept every default without prompting. Pin a version or install files only:
 
 ```bash
-PRAGMATIC_CLAUDE_REF=v0.1.0 curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash -s -- --no-setup
+PLAYBOOK_REF=v0.2.0 curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash -s -- --no-setup
 ```
 
-Pin `PRAGMATIC_CLAUDE_REF` to a tag or commit for a reproducible, reviewable install: the same files every run, and a ref you inspect first.
+Pin `PLAYBOOK_REF` to a tag or commit for a reproducible, reviewable install: the same files every run, and a ref you inspect first.
 
 Flags (pass after `-s --` when piping, e.g. `bash -s -- --yes`):
 
@@ -44,15 +44,15 @@ Flags (pass after `-s --` when piping, e.g. `bash -s -- --yes`):
 | `--skip-deps` | skip `brew bundle` |
 | `--skip-shell` | skip editing `~/.zshrc` |
 | `--no-setup` | install files only: no plugin, deps, or shell edits |
-| `--ref <ref>` | source ref (same as `PRAGMATIC_CLAUDE_REF`) |
+| `--ref <ref>` | source ref (same as `PLAYBOOK_REF`) |
 
 ### Just the plugin
 
 Want only the skills, commands, agents, and functional hooks, without adopting `~/.claude`? Add the marketplace and install the plugin directly:
 
 ```bash
-claude plugin marketplace add igorjs/pragmatic-claude
-claude plugin install pragmatic-claude@pragmatic-claude
+claude plugin marketplace add pragmatic-engineer/marketplace
+claude plugin install playbook@pragmatic-engineer
 ```
 
 The always-on safety guards (`rm`, background-await, dash) are wired by the installer's `settings.json` seed, not by the plugin, so a plugin-only install does not include them.
@@ -60,7 +60,7 @@ The always-on safety guards (`rm`, background-await, dash) are wired by the inst
 Prefer git? Clone fresh:
 
 ```bash
-git clone https://github.com/igorjs/pragmatic-claude.git ~/.claude
+git clone https://github.com/pragmatic-engineer/playbook.git ~/.claude
 ```
 
 Already have a `~/.claude` from Claude Code? Adopt it in place. The `.gitignore` is an allowlist, so sessions, caches, and runtime files stay ignored:
@@ -68,7 +68,7 @@ Already have a `~/.claude` from Claude Code? Adopt it in place. The `.gitignore`
 ```bash
 cd ~/.claude
 git init
-git remote add origin https://github.com/igorjs/pragmatic-claude.git
+git remote add origin https://github.com/pragmatic-engineer/playbook.git
 git fetch origin
 git checkout -f main
 ```
