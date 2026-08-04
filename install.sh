@@ -2,24 +2,25 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# Installer for igorjs/pragmatic-claude. Plugin based: the toolkit (skills,
+# Installer for pragmatic-engineer/playbook. Plugin based: the toolkit (skills,
 # commands, agents, and the functional hooks) is delivered as a Claude Code
 # plugin, while this script installs the always-on safety guards and the other
 # local configs (settings.json, statusline, shell integration, dependencies).
 # Interactive by default; every optional step asks before it runs.
 #
-#   curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
 #
-# Source of truth: the latest GitHub release by default, or PRAGMATIC_CLAUDE_REF
+# Source of truth: the latest GitHub release by default, or PLAYBOOK_REF
 # (any tag/branch/sha). Falls back to the main branch when no release exists.
 # Existing tracked files are backed up before being replaced; runtime state
 # (sessions/, projects/, history, plugins/) is never touched.
 set -euo pipefail
 
-REPO="igorjs/pragmatic-claude"
-PLUGIN="pragmatic-claude@pragmatic-claude"
+PLUGIN_REPO="pragmatic-engineer/playbook"
+MARKETPLACE="pragmatic-engineer/marketplace"
+PLUGIN="playbook@pragmatic-engineer"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
-REF="${PRAGMATIC_CLAUDE_REF:-}"
+REF="${PLAYBOOK_REF:-}"
 SKIP_DEPS=0
 SKIP_SHELL=0
 SKIP_PLUGIN=0
@@ -59,23 +60,23 @@ ask() {
 
 print_help() {
     cat <<'EOF'
-Install igorjs/pragmatic-claude. Plugin based, interactive by default.
+Install pragmatic-engineer/playbook. Plugin based, interactive by default.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/igorjs/pragmatic-claude/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
   curl -fsSL .../install.sh | bash -s -- [flags]
   ./install.sh [flags]
 
 What it does:
   - installs the toolkit as a Claude Code plugin (adds the marketplace, installs
-    and enables pragmatic-claude), which provides the skills, commands, agents,
+    and enables playbook), which provides the skills, commands, agents,
     and functional hooks;
   - installs the always-on safety guards (rm, background-await, dash guards) and
     the other local configs (settings.json, statusline, shell launchers, deps).
 
 Env:
-  PRAGMATIC_CLAUDE_REF=<tag|branch|sha>  source ref (default: latest release, else main)
-  CLAUDE_HOME=<dir>                      install target (default: $HOME/.claude)
+  PLAYBOOK_REF=<tag|branch|sha>  source ref (default: latest release, else main)
+  CLAUDE_HOME=<dir>              install target (default: $HOME/.claude)
 
 Flags:
   --yes          non-interactive: accept every step's default
@@ -83,7 +84,7 @@ Flags:
   --skip-deps    skip 'brew bundle'
   --skip-shell   skip editing ~/.zshrc
   --no-setup     skip all setup steps (install files only: no plugin, deps, shell)
-  --ref <ref>    same as PRAGMATIC_CLAUDE_REF
+  --ref <ref>    same as PLAYBOOK_REF
   -h, --help     show this help
 EOF
 }
@@ -109,26 +110,26 @@ command -v tar  >/dev/null 2>&1 || die "tar is required"
 
 resolve_tarball_url() {
     if [ -n "$REF" ]; then
-        printf 'https://codeload.github.com/%s/tar.gz/%s\n' "$REPO" "$REF"
+        printf 'https://codeload.github.com/%s/tar.gz/%s\n' "$PLUGIN_REPO" "$REF"
         return
     fi
     local api tag
-    api="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)"
+    api="$(curl -fsSL "https://api.github.com/repos/$PLUGIN_REPO/releases/latest" 2>/dev/null || true)"
     tag="$(printf '%s' "$api" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
     tag="${tag%%$'\n'*}"
     if [ -n "$tag" ]; then
-        printf 'https://codeload.github.com/%s/tar.gz/refs/tags/%s\n' "$REPO" "$tag"
+        printf 'https://codeload.github.com/%s/tar.gz/refs/tags/%s\n' "$PLUGIN_REPO" "$tag"
     else
         warn "no GitHub release found; falling back to the main branch"
-        printf 'https://codeload.github.com/%s/tar.gz/refs/heads/main\n' "$REPO"
+        printf 'https://codeload.github.com/%s/tar.gz/refs/heads/main\n' "$PLUGIN_REPO"
     fi
 }
 
-# PRAGMATIC_CLAUDE_SRC is a test seam: when set, install straight from a local
+# PLAYBOOK_SRC is a test seam: when set, install straight from a local
 # checkout and skip the network path (resolve/curl/tar) entirely.
-SRC="${PRAGMATIC_CLAUDE_SRC:-}"
+SRC="${PLAYBOOK_SRC:-}"
 if [ -n "$SRC" ]; then
-    [ -d "$SRC" ] || die "PRAGMATIC_CLAUDE_SRC is not a directory: $SRC"
+    [ -d "$SRC" ] || die "PLAYBOOK_SRC is not a directory: $SRC"
     log "Installing from local source $SRC"
 else
     TMP="$(mktemp -d)"
@@ -139,7 +140,7 @@ else
     curl -fsSL "$url" -o "$TMP/config.tar.gz" || die "download failed: $url"
     tar -xzf "$TMP/config.tar.gz" -C "$TMP" || die "could not extract archive"
 
-    SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '*pragmatic-claude*' | head -1)"
+    SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name '*playbook*' | head -1)"
     [ -n "$SRC" ] || SRC="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)"
     [ -d "$SRC" ] || die "could not locate extracted source directory"
 fi
@@ -170,7 +171,7 @@ done
 shopt -u dotglob nullglob
 
 # Ensure TMP is always set: the network path creates it above; the local-source
-# path (PRAGMATIC_CLAUDE_SRC test seam) does not. Both the merge scratch dir and
+# path (PLAYBOOK_SRC test seam) does not. Both the merge scratch dir and
 # any tarball temp dir share the same EXIT trap so there is only one cleanup.
 if [ -z "${TMP:-}" ]; then
     TMP="$(mktemp -d)"
@@ -247,11 +248,11 @@ fi
 # so they do not depend on the plugin.
 if [ "$SKIP_PLUGIN" -eq 0 ]; then
     if command -v claude >/dev/null 2>&1; then
-        if ask "Add the pragmatic-claude marketplace and install the plugin?" Y; then
+        if ask "Add the playbook marketplace and install the plugin?" Y; then
             log "Adding marketplace and installing the plugin"
             # </dev/null keeps claude off the script's stdin under `curl | bash`.
-            claude plugin marketplace add "$REPO" </dev/null \
-                || warn "marketplace add failed; later: claude plugin marketplace add $REPO"
+            claude plugin marketplace add "$MARKETPLACE" </dev/null \
+                || warn "marketplace add failed; later: claude plugin marketplace add $MARKETPLACE"
             claude plugin install "$PLUGIN" </dev/null \
                 || warn "plugin install failed; later: claude plugin install $PLUGIN"
             claude plugin enable "$PLUGIN" </dev/null >/dev/null 2>&1 || true
@@ -268,7 +269,7 @@ if [ "$SKIP_PLUGIN" -eq 0 ]; then
         fi
     else
         warn "claude CLI not found; skipping the plugin (the toolkit ships as a plugin)."
-        warn "Install it, then run: claude plugin marketplace add $REPO && claude plugin install $PLUGIN"
+        warn "Install it, then run: claude plugin marketplace add $MARKETPLACE && claude plugin install $PLUGIN"
     fi
 fi
 
@@ -300,7 +301,7 @@ if [ "$SKIP_SHELL" -eq 0 ]; then
         # Single quotes are intentional: write the literal $HOME so zsh expands
         # it at runtime, not the install-time value.
         # shellcheck disable=SC2016
-        printf '\n# pragmatic-claude launchers (cc/ccd)\nsource "$HOME/.claude/shell/cc.zsh"\n' >> "$ZSHRC"
+        printf '\n# playbook launchers (cc/ccd)\nsource "$HOME/.claude/shell/cc.zsh"\n' >> "$ZSHRC"
         log "Added cc.zsh source to your .zshrc${zshrc_backup}"
     fi
 fi
@@ -314,7 +315,7 @@ printf 'Installed to: %s\n' "$CLAUDE_HOME"
 printf '\nNext steps:\n'
 if ! command -v claude >/dev/null 2>&1; then
     printf '  - Install the claude CLI: npm i -g @anthropic-ai/claude-code (or the native installer)\n'
-    printf '  - Then: claude plugin marketplace add %s && claude plugin install %s\n' "$REPO" "$PLUGIN"
+    printf '  - Then: claude plugin marketplace add %s && claude plugin install %s\n' "$MARKETPLACE" "$PLUGIN"
 else
     printf '  - The toolkit is a plugin: manage it with `claude plugin list` / `enable` / `disable`.\n'
 fi
