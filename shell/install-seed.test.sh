@@ -29,8 +29,13 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 
 # Run the real installer against a local source, fully hermetic: the seam skips
 # the network path and --no-setup skips brew/zshrc/shell-reload.
+# setup-local.sh and merge-settings.sh are injected into every test src so
+# that install.sh can call setup-local.sh after the file-copy loop (WU-2.1).
 run_install() {
   local src="$1" home="$2"
+  mkdir -p "$src/shell"
+  [ -f "$src/shell/setup-local.sh" ]    || cp "$SCRIPT_DIR/setup-local.sh"    "$src/shell/setup-local.sh"
+  [ -f "$src/shell/merge-settings.sh" ] || cp "$SCRIPT_DIR/merge-settings.sh" "$src/shell/merge-settings.sh"
   PLAYBOOK_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
     bash "$INSTALL" --no-setup >/dev/null 2>&1
 }
@@ -117,6 +122,9 @@ MERGE="${SCRIPT_DIR}/merge-settings.sh"
 # Sets _INSTALL_RC and _INSTALL_ERR_FILE.
 run_install_full() {
   local src="$1" home="$2" errfile="$3"
+  mkdir -p "$src/shell"
+  [ -f "$src/shell/setup-local.sh" ]    || cp "$SCRIPT_DIR/setup-local.sh"    "$src/shell/setup-local.sh"
+  [ -f "$src/shell/merge-settings.sh" ] || cp "$SCRIPT_DIR/merge-settings.sh" "$src/shell/merge-settings.sh"
   PLAYBOOK_SRC="$src" CLAUDE_HOME="$home" HOME="$home" \
     bash "$INSTALL" --no-setup >/dev/null 2>"$errfile"
   _INSTALL_RC=$?
@@ -181,9 +189,9 @@ scenario_merge_update() {
   jq -e '.product_key == "new_prod"' "$home/settings.json" >/dev/null 2>&1 \
     || { echo "  product key not updated: $(jq -c . "$home/settings.json")"; return 1; }
 
-  # Snapshot dir exists.
+  # Snapshot dir exists (setup-local.sh creates setup-* dirs for settings changes).
   local snapdirs
-  snapdirs="$(find "$home/backups" -maxdepth 1 -type d -name 'install-*' 2>/dev/null | wc -l | tr -d ' ')"
+  snapdirs="$(find "$home/backups" -maxdepth 1 -type d -name 'setup-*' 2>/dev/null | wc -l | tr -d ' ')"
   [ "${snapdirs:-0}" -ge 1 ] \
     || { echo "  no snapshot dir found under $home/backups"; return 1; }
 
