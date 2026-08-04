@@ -18,22 +18,36 @@ The skills, commands, agents, and functional hooks also ship as an opt-in Claude
 
 ## Install
 
-Config lives at `~/.claude` (all paths are hardcoded to `$HOME/.claude`).
+Three steps: **get it**, **activate it**, **verify it**.
 
-Quickest, no clone:
+### Get it
+
+**Plugin (fastest):** adds only the skills, commands, agents, and functional
+hooks. No `~/.claude` files are written; the always-on safety guards are NOT
+included (they need the local wiring from the next step).
+
+```bash
+claude plugin marketplace add pragmatic-engineer/marketplace
+claude plugin install playbook@pragmatic-engineer
+```
+
+**One-liner (files + plugin + local wiring):** downloads the files into
+`~/.claude`, wires the safety guards and `settings.json`, asks before the
+plugin, `brew bundle`, and `~/.zshrc` edits, and opens a fresh shell.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
 ```
 
-Interactive by default. It installs the toolkit as a Claude Code plugin (adds the `pragmatic-engineer/marketplace` marketplace, then installs and enables the plugin), wires the always-on safety guards and the other local config, and asks before each optional step (plugin, `brew bundle`, `~/.zshrc`). It downloads the latest release (or `main` if none exists), backs up anything it replaces to `~/.claude/backups/`, and opens a fresh shell. Pass `--yes` to accept every default without prompting. Pin a version or install files only:
+Pass `--yes` to accept every default without prompting. Pin a version or skip
+setup steps:
 
 ```bash
 PLAYBOOK_REF=v0.2.0 curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash
 curl -fsSL https://raw.githubusercontent.com/pragmatic-engineer/playbook/main/install.sh | bash -s -- --no-setup
 ```
 
-Pin `PLAYBOOK_REF` to a tag or commit for a reproducible, reviewable install: the same files every run, and a ref you inspect first.
+Pin `PLAYBOOK_REF` to a tag or commit for a reproducible, reviewable install.
 
 Flags (pass after `-s --` when piping, e.g. `bash -s -- --yes`):
 
@@ -46,24 +60,15 @@ Flags (pass after `-s --` when piping, e.g. `bash -s -- --yes`):
 | `--no-setup` | install files only: no plugin, deps, or shell edits |
 | `--ref <ref>` | source ref (same as `PLAYBOOK_REF`) |
 
-### Just the plugin
-
-Want only the skills, commands, agents, and functional hooks, without adopting `~/.claude`? Add the marketplace and install the plugin directly:
-
-```bash
-claude plugin marketplace add pragmatic-engineer/marketplace
-claude plugin install playbook@pragmatic-engineer
-```
-
-The always-on safety guards (`rm`, background-await, dash) are wired by the installer's `settings.json` seed, not by the plugin, so a plugin-only install does not include them.
-
 Prefer git? Clone fresh:
 
 ```bash
 git clone https://github.com/pragmatic-engineer/playbook.git ~/.claude
 ```
 
-Already have a `~/.claude` from Claude Code? Adopt it in place. The `.gitignore` is an allowlist, so sessions, caches, and runtime files stay ignored:
+Already have a `~/.claude` from Claude Code? Adopt it in place. The
+`.gitignore` is an allowlist so sessions, caches, and runtime files stay
+ignored:
 
 ```bash
 cd ~/.claude
@@ -73,13 +78,37 @@ git fetch origin
 git checkout -f main
 ```
 
-Add the launcher to `.zshrc`:
+### Activate
 
-```bash
-source ~/.claude/shell/cc.zsh
+After getting the files (plugin install OR curl one-liner OR git clone), run
+`/setup` inside any Claude Code session. It wires the always-on safety guards
+into `settings.json`, seeds the shell launcher into `~/.zshrc`, and runs
+`brew bundle` for the declared deps. Each step is idempotent.
+
+```
+/setup
 ```
 
-Reload with `exec zsh`.
+You can also run the underlying script directly:
+
+```bash
+bash ~/.claude/shell/setup-local.sh
+```
+
+### Verify
+
+Run `/doctor` to see a pass/fail status table: plugin enabled, guards wired,
+`settings.json` present, shell integration, and key deps.
+
+```
+/doctor
+```
+
+### Summary
+
+1. Install: `claude plugin install playbook@pragmatic-engineer` (or the curl one-liner)
+2. Activate: `/setup`
+3. Verify: `/doctor`
 
 ## Usage
 
@@ -115,6 +144,8 @@ Full documentation: [`docs/index.md`](docs/index.md).
 
 Slash commands live in `commands/`. See [docs/guides](docs/guides) for full usage.
 
+- `/setup`: wires the always-on safety guards into `settings.json`, seeds or merges the settings template, adds `shell/cc.zsh` to `~/.zshrc`, and installs Homebrew deps. Safe to run repeatedly.
+- `/doctor`: checks plugin status, guards wired, `settings.json` present, shell integration, and key deps (`delta`, `jq`, `gh`); prints a pass/fail table with a remediation hint for each miss.
 - `/brainstorm`: divergent discovery session; explores a raw idea, weighs approaches, and produces an approved design doc that hands off to `/scope`.
 - `/scope`: interview-driven planning; saves a verified, parallel-safe plan to `.claude/plans/` for `/implement`.
 - `/implement`: executes a `/scope` plan or `/adr` blueprint with subagents and TDD, committing each work unit. `--auto` opens a PR.

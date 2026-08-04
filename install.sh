@@ -170,75 +170,17 @@ for src in "$SRC"/*; do
 done
 shopt -u dotglob nullglob
 
-# Ensure TMP is always set: the network path creates it above; the local-source
-# path (PLAYBOOK_SRC test seam) does not. Both the merge scratch dir and
-# any tarball temp dir share the same EXIT trap so there is only one cleanup.
-if [ -z "${TMP:-}" ]; then
-    TMP="$(mktemp -d)"
-    trap 'rm -rf "$TMP"' EXIT
-fi
-
-# Seed or merge settings.json from the shipped template.
-# - Fresh install (no existing settings.json): copy template to settings.json
-#   and record it as the baseline in .settings.base.json.
-# - Existing install: run a 3-way merge (baseline + template + user) via the
-#   merge-settings.sh that was just copied in from the installed tree.
-#   Customisations are preserved; new product config is applied. Uses an atomic
-#   temp-file-then-mv pattern to avoid partial writes.
-# - Absent template: no-op; continue safely.
-# The shipped template wires only the always-on safety guards; the functional
-# hooks come from the plugin, so a plugin-enabled install does not double-fire.
-MERGE_TMP="$TMP/settings-merge"
-mkdir -p "$MERGE_TMP"
-if [ -f "$CLAUDE_HOME/settings.shared.json" ]; then
-    if [ ! -e "$CLAUDE_HOME/settings.json" ]; then
-        # Fresh install: seed settings.json and record the shipped baseline.
-        cp "$CLAUDE_HOME/settings.shared.json" "$CLAUDE_HOME/settings.json"
-        cp "$CLAUDE_HOME/settings.shared.json" "$CLAUDE_HOME/.settings.base.json"
-        log "Seeded default settings.json from settings.shared.json"
-    else
-        # Existing install: 3-way merge.
-        MERGE_BIN="$CLAUDE_HOME/shell/merge-settings.sh"
-        MERGE_SKIP_TMP="$MERGE_TMP/settings-merge-skipped.json"
-        if merged="$(bash "$MERGE_BIN" \
-                "$CLAUDE_HOME/.settings.base.json" \
-                "$CLAUDE_HOME/settings.shared.json" \
-                "$CLAUDE_HOME/settings.json" \
-                "$MERGE_TMP/newbase" \
-                "$MERGE_SKIP_TMP" 2>/dev/null)"; then
-            if printf '%s\n' "$merged" | cmp -s - "$CLAUDE_HOME/settings.json"; then
-                # Idempotent: refresh base only; do not touch settings.json.
-                mv "$MERGE_TMP/newbase" "$CLAUDE_HOME/.settings.base.json"
-                log "settings.json already up to date"
-            else
-                # Content changed: snapshot, write, move skip file into backup.
-                mkdir -p "$BACKUP"
-                cp "$CLAUDE_HOME/settings.json" "$BACKUP/"
-                mv "$MERGE_SKIP_TMP" "$BACKUP/settings-merge-skipped.json"
-                printf '%s\n' "$merged" > "$MERGE_TMP/settings.json.new"
-                mv "$MERGE_TMP/settings.json.new" "$CLAUDE_HOME/settings.json"
-                mv "$MERGE_TMP/newbase" "$CLAUDE_HOME/.settings.base.json"
-                backed_up=1
-                _nw="$(jq 'length' "$BACKUP/settings-merge-skipped.json" 2>/dev/null)" \
-                    || _nw='0'
-                log "Merged settings.json (${_nw} keys withheld; see $BACKUP/settings-merge-skipped.json)"
-                if [ "${_nw:-0}" -gt 0 ]; then
-                    warn "Some customised keys were also updated by the new template."
-                    warn "Review $BACKUP/settings-merge-skipped.json after install."
-                fi
-                log "A resumed session may show config-drift; run 'cc fresh' to reload."
-            fi
-            # Prune install backup dirs older than the newest 5.
-            find "$CLAUDE_HOME/backups" -maxdepth 1 -type d -name 'install-*' \
-                2>/dev/null | sort -r | tail -n +6 \
-                | while IFS= read -r _old; do [ -n "$_old" ] && rm -rf "$_old"; done \
-                || true
-        else
-            warn "settings.json merge failed; settings.json left unchanged."
-            warn "If this persists, delete $CLAUDE_HOME/.settings.base.json to reset to additive merge."
-        fi
-    fi
-fi
+# Wire the always-on guards and seed/merge settings.json via setup-local.sh.
+# IMPORTANT: setup-local.sh is called unconditionally -- even with --no-setup.
+# --no-setup means "no plugin, no deps, no shell edits", not "no settings".
+# The guard hooks and settings.json must always be wired, so only --skip-deps
+# and --skip-shell are forwarded; there is no flag to suppress this call.
+_SETUP_ARGS=""
+[ "$SKIP_DEPS"  -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --skip-deps"
+[ "$SKIP_SHELL" -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --skip-shell"
+[ "$ASSUME_YES" -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --yes"
+# shellcheck disable=SC2086
+bash "$CLAUDE_HOME/shell/setup-local.sh" $_SETUP_ARGS
 
 # --- setup -----------------------------------------------------------------
 
@@ -270,39 +212,6 @@ if [ "$SKIP_PLUGIN" -eq 0 ]; then
     else
         warn "claude CLI not found; skipping the plugin (the toolkit ships as a plugin)."
         warn "Install it, then run: claude plugin marketplace add $MARKETPLACE && claude plugin install $PLUGIN"
-    fi
-fi
-
-if [ "$SKIP_DEPS" -eq 0 ]; then
-    if command -v brew >/dev/null 2>&1; then
-        if ask "Install dependencies with 'brew bundle'?" Y; then
-            log "Installing dependencies (brew bundle)"
-            # </dev/null is required: when this script is run via `curl ... | bash`,
-            # the script itself arrives on stdin. brew reads stdin and would consume
-            # the rest of the script, so setup steps after this would silently never
-            # run. Redirecting keeps brew off the script stream.
-            brew bundle --file "$CLAUDE_HOME/Brewfile" </dev/null || warn "brew bundle reported errors"
-        fi
-    else
-        warn "Homebrew not found; skipping deps. See https://brew.sh, then: brew bundle --file $CLAUDE_HOME/Brewfile"
-    fi
-fi
-
-if [ "$SKIP_SHELL" -eq 0 ]; then
-    ZSHRC="$HOME/.zshrc"
-    if [ -f "$ZSHRC" ] && grep -qF 'shell/cc.zsh' "$ZSHRC"; then
-        log "Your .zshrc already sources cc.zsh"
-    elif ask "Add the cc/ccd launchers to your ~/.zshrc?" Y; then
-        zshrc_backup=""
-        if [ -f "$ZSHRC" ]; then
-            cp "$ZSHRC" "$ZSHRC.bak-$STAMP"
-            zshrc_backup=" (backup: $ZSHRC.bak-$STAMP)"
-        fi
-        # Single quotes are intentional: write the literal $HOME so zsh expands
-        # it at runtime, not the install-time value.
-        # shellcheck disable=SC2016
-        printf '\n# playbook launchers (cc/ccd)\nsource "$HOME/.claude/shell/cc.zsh"\n' >> "$ZSHRC"
-        log "Added cc.zsh source to your .zshrc${zshrc_backup}"
     fi
 fi
 
