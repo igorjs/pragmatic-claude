@@ -270,7 +270,7 @@ scenario_comment_old() {
     [ -d "$d" ] || { echo "  SAFETY: temp root removed"; exit 1; }
 }
 
-# D2: new variant — # pragmatic-claude launchers (cc/ccd)
+# D2: new variant — # playbook launchers (cc/ccd)
 scenario_comment_new() {
     local d ch h
     d="$(mktemp -d "$WORK/comment_new.XXXXXX")"
@@ -281,7 +281,7 @@ scenario_comment_new() {
     assert_hermetic "$d" "$ch" "$h"
 
     create_shipped "$ch"
-    write_zshrc_block "$h/.zshrc" "# pragmatic-claude launchers (cc/ccd)"
+    write_zshrc_block "$h/.zshrc" "# playbook launchers (cc/ccd)"
     local orig_lines
     orig_lines=$(wc -l < "$h/.zshrc" | tr -d ' ')
 
@@ -292,7 +292,7 @@ scenario_comment_new() {
     grep -qF 'shell/cc.zsh' "$h/.zshrc" && { echo "  cc.zsh still in .zshrc"; return 1; }
     grep -qxF '# BEFORE_SENTINEL' "$h/.zshrc" || { echo "  BEFORE_SENTINEL missing"; return 1; }
     grep -qxF '# AFTER_SENTINEL'  "$h/.zshrc" || { echo "  AFTER_SENTINEL missing"; return 1; }
-    grep -qF 'pragmatic-claude launchers' "$h/.zshrc" && { echo "  new comment line still present"; return 1; }
+    grep -qF 'playbook launchers' "$h/.zshrc" && { echo "  new comment line still present"; return 1; }
 
     local after_lines
     after_lines=$(wc -l < "$h/.zshrc" | tr -d ' ')
@@ -345,7 +345,7 @@ run_scenario "A: basic uninstall removes shipped entries, preserves runtime" sce
 run_scenario "B: git guard refuses without --force; proceeds with --force --yes" scenario_git_guard
 run_scenario "C: --purge also removes settings.json, .settings.base.json, backups/" scenario_purge
 run_scenario "D1: old comment variant (# claude-config launchers) removed" scenario_comment_old
-run_scenario "D2: new comment variant (# pragmatic-claude launchers) removed" scenario_comment_new
+run_scenario "D2: new comment variant (# playbook launchers) removed" scenario_comment_new
 run_scenario "D3: no-comment case (bare source line) removed" scenario_comment_none
 
 TOTAL=$(( PASS + FAIL ))
