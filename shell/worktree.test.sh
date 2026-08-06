@@ -2,24 +2,24 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# worktree.test.sh: focused tests for the worktree base-dir resolver in
-# shell/worktree.zsh (_wt_resolve_base). Covers the default base, relative and
-# absolute WORKTREE_BASE_DIR overrides, the repo-name grouping leaf, and the
-# guard that stops a "." base collapsing back into the repo root.
+# worktree.test.sh: hermetic tests for shell/worktree.sh.
+# Covers the base-dir resolver, helper functions (unit, via zsh when available),
+# and end-to-end worktree creation in both bash and zsh.
 #
 # Run:  bash shell/worktree.test.sh
 # Exit: 0 if all scenarios pass, non-zero otherwise.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENGINE="${SCRIPT_DIR}/worktree.zsh"
+ENGINE="${SCRIPT_DIR}/worktree.sh"
 PASS=0
 FAIL=0
+SKIP=0
 
-if ! command -v zsh >/dev/null 2>&1; then
-  echo "SKIP: zsh not available; worktree.zsh resolver tests need zsh"
-  exit 0
-fi
+skip() { printf 'SKIP  %s\n' "$1"; SKIP=$(( SKIP + 1 )); }
+
+HAVE_ZSH=0
+command -v zsh >/dev/null 2>&1 && HAVE_ZSH=1
 
 # Resolve the base dir by sourcing the engine under zsh and calling the helper.
 # Args: 1=WORKTREE_BASE_DIR value ("" for default), 2=repo_root, 3=repo_parent.
@@ -28,6 +28,15 @@ resolve() {
   # shellcheck disable=SC2016  # $1..$3 are for the zsh subshell, not bash
   WORKTREE_BASE_DIR="$base" \
     zsh -c 'source "$1"; _wt_resolve_base "$2" "$3"' _ "$ENGINE" "$root" "$parent"
+}
+
+# Guard for scenarios that require zsh.
+_need_zsh() {
+  if (( ! HAVE_ZSH )); then
+    skip "$1 (zsh not on PATH)"
+    return 1
+  fi
+  return 0
 }
 
 run_scenario() {
@@ -75,11 +84,13 @@ scenario_dot_guard() {
   [[ "$got" == "/home/u/ws/.worktrees/myrepo" ]] || { echo "  '.' not defaulted: '$got'"; return 1; }
 }
 
+if _need_zsh "A-E (resolver scenarios)"; then
 run_scenario "A: default base is .worktrees/<repo>"       scenario_default
 run_scenario "B: relative WORKTREE_BASE_DIR override"     scenario_relative
 run_scenario "C: absolute WORKTREE_BASE_DIR override"     scenario_absolute
 run_scenario "D: repo-name grouping avoids collisions"    scenario_grouping
 run_scenario "E: '.' base guarded to default"             scenario_dot_guard
+fi
 
 # ── WU-4: smoke tests ─────────────────────────────────────────────────────────
 
@@ -229,9 +240,11 @@ scenario_find_env_base() {
   (( ok ))
 }
 
+if _need_zsh "F-H (unit scenarios)"; then
 run_scenario "F: branch classification (protected vs feature)"  scenario_branch_classification
 run_scenario "G: _wt_restore_stash stash-pop and no-op"        scenario_restore_stash
 run_scenario "H: _wt_find_env_base four cases"                 scenario_find_env_base
+fi
 
 # ── WU-1/2/3 tests ────────────────────────────────────────────────────────────
 
@@ -574,14 +587,130 @@ EOF
   (( ok ))
 }
 
+if _need_zsh "I-M (integration scenarios)"; then
 run_scenario "I: _wt_ai_resolve_decision matrix"               scenario_ai_resolve_decision
 run_scenario "J: _wt_ai_resolve_info output"                   scenario_ai_resolve_info
 run_scenario "K: _wt_setup_upstream --no-push"                 scenario_no_push
 run_scenario "L: _wt_node_modules CoW clone"                   scenario_cow_node_modules
 run_scenario "M: _wt_maybe_rebase conflict (integration)"      scenario_maybe_rebase_conflict
+fi
+
+# ── N/O: dual-shell worktree creation ─────────────────────────────────────────
+# Build a throwaway git repo with a local bare origin, then call _cc_worktree
+# directly (no dispatcher) with _WT_NO_LAUNCH=1 WORKTREE_NO_PUSH=1.
+# Asserts: worktree dir at correct JIRA-key path, branch exists, gitignored
+# .env copied, non-gitignored app/.env NOT copied.
+
+_WT_TMPBASE="$(mktemp -d)"
+_wt_cleanup_tmp() { rm -rf "$_WT_TMPBASE"; }
+trap _wt_cleanup_tmp EXIT
+
+_wt_setup_repo() {
+  local repo="$1" bare="$2"
+  git init --bare --quiet "$bare"
+  git init --quiet "$repo"
+  git -C "$repo" config user.email "test@test.local"
+  git -C "$repo" config user.name "Test User"
+  printf 'hello\n' > "$repo/README"
+  git -C "$repo" add README
+  git -C "$repo" commit --quiet -m "initial"
+  git -C "$repo" remote add origin "$bare"
+  git -C "$repo" push --quiet -u origin HEAD 2>/dev/null || true
+  git -C "$repo" fetch --quiet origin 2>/dev/null || true
+  git -C "$repo" remote set-head origin --auto 2>/dev/null || true
+  # gitignored .env (should be copied)
+  printf 'SECRET=test\n' > "$repo/.env"
+  printf '.env\n' > "$repo/.gitignore"
+  git -C "$repo" add .gitignore
+  git -C "$repo" commit --quiet -m "add gitignore"
+  git -C "$repo" push --quiet origin HEAD 2>/dev/null || true
+  # tracked app/.env (must NOT be copied)
+  mkdir -p "$repo/app"
+  printf 'PUBLIC=yes\n' > "$repo/app/.env"
+  git -C "$repo" add "$repo/app/.env"
+  git -C "$repo" commit --quiet -m "add tracked app/.env"
+  git -C "$repo" push --quiet origin HEAD 2>/dev/null || true
+}
+
+_run_creation_test() {
+  local shell_bin="$1" label="$2"
+  local repo="$_WT_TMPBASE/repo_$label"
+  local bare="$_WT_TMPBASE/bare_$label"
+  local wt_base="$_WT_TMPBASE/wts_$label"
+  local testhome="$_WT_TMPBASE/home_$label"
+  mkdir -p "$testhome"
+  _wt_setup_repo "$repo" "$bare"
+  local repo_name="${repo##*/}"
+
+  local out rc=0
+  out=$(
+    HOME="$testhome" PATH="$SCRIPT_DIR/../shell:$PATH" \
+    WORKTREE_BASE_DIR="$wt_base" \
+    _WT_NO_LAUNCH=1 WORKTREE_NO_PUSH=1 WORKTREE_AI_RESOLVE=0 \
+    GIT_AUTHOR_NAME="Test User" GIT_COMMITTER_NAME="Test User" \
+    GIT_AUTHOR_EMAIL="test@test.local" GIT_COMMITTER_EMAIL="test@test.local" \
+    "$shell_bin" -c "
+      cd '$repo'
+      source '$ENGINE'
+      _cc_worktree TEST-123-foo
+    " 2>&1
+  ) || rc=$?
+
+  local wt_dir="$wt_base/$repo_name/TEST-123"
+
+  if [[ -d "$wt_dir" ]]; then
+    if [[ "$1" == "bash" ]]; then
+      run_scenario "N: bash worktree dir at JIRA-key path" true
+    else
+      run_scenario "O: zsh worktree dir at JIRA-key path" true
+    fi
+  else
+    if [[ "$1" == "bash" ]]; then
+      run_scenario "N: bash worktree dir at JIRA-key path" false
+    else
+      run_scenario "O: zsh worktree dir at JIRA-key path" false
+    fi
+    echo "  not found at $wt_dir (rc=$rc)"
+    echo "  output: $out"
+  fi
+
+  local pfx; [[ "$shell_bin" == "bash" ]] && pfx="N" || pfx="O"
+
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/TEST-123-foo" 2>/dev/null; then
+    run_scenario "$pfx: $label branch TEST-123-foo created" true
+  else
+    run_scenario "$pfx: $label branch TEST-123-foo created" false
+    echo "  branch not found; rc=$rc out=$out"
+  fi
+
+  if [[ -f "$wt_dir/.env" ]]; then
+    run_scenario "$pfx: $label gitignored .env copied" true
+  else
+    run_scenario "$pfx: $label gitignored .env copied" false
+    echo "  .env missing in $wt_dir; rc=$rc out=$out"
+  fi
+
+  if [[ ! -f "$wt_dir/app/.env" ]]; then
+    run_scenario "$pfx: $label non-gitignored app/.env not copied" true
+  else
+    run_scenario "$pfx: $label non-gitignored app/.env not copied" false
+  fi
+}
+
+echo ""
+echo "=== bash creation tests ==="
+_run_creation_test bash bash
+
+echo ""
+echo "=== zsh creation tests ==="
+if (( HAVE_ZSH )); then
+  _run_creation_test zsh zsh
+else
+  skip "N/O: zsh not on PATH; skipping zsh creation tests"
+fi
 
 TOTAL=$(( PASS + FAIL ))
 echo ""
-echo "${PASS}/${TOTAL} scenarios passed"
+echo "${PASS}/${TOTAL} scenarios passed  (${SKIP} skipped)"
 
 [[ $FAIL -eq 0 ]]

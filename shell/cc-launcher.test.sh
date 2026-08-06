@@ -10,7 +10,7 @@
 #   (a) sourcing shell/cc.sh in bash defines cc and ccd
 #   (b) without SYSTEM_PROMPT.md, --system-prompt-file is NOT passed
 #   (c) with    SYSTEM_PROMPT.md, --system-prompt-file IS  passed
-#   (d) cc worktree returns non-zero and prints the zsh-only message
+#   (d) cc worktree is available in bash: _cc_worktree is defined and prints no zsh-only stub
 #   (e-g) same guard tests (b-c) for shell/cc.zsh in zsh, if zsh is on PATH
 
 set -uo pipefail
@@ -77,18 +77,30 @@ fi
 rm -f "$ARGS_C"
 rm -f "$TESTHOME/.claude/prompts/SYSTEM_PROMPT.md"
 
-# (d) cc worktree → non-zero exit + zsh-only message
-WORKTREE_RC=0
-WORKTREE_OUT=$(
-    HOME="$TESTHOME" PATH="$TMPBIN:$PATH" \
-    bash -c "source '$REPO_DIR/shell/cc.sh'; cc worktree 2>&1"
-) || WORKTREE_RC=$?
+# (d) cc worktree is now available in bash (_cc_worktree defined, no zsh-only stub)
+# cc.sh sources worktree.sh via $HOME/.claude/shell/worktree.sh; stage it.
+mkdir -p "$TESTHOME/.claude/shell"
+cp "$REPO_DIR/shell/worktree.sh" "$TESTHOME/.claude/shell/worktree.sh"
 
-if [[ "$WORKTREE_RC" -ne 0 ]] && printf '%s' "$WORKTREE_OUT" | grep -q "zsh-only"; then
-    pass "(d) bash: cc worktree prints zsh-only message and returns non-zero"
+WORKTREE_D_DEFINED=0
+HOME="$TESTHOME" PATH="$TMPBIN:$PATH" \
+    bash -c "source '$REPO_DIR/shell/cc.sh'; type _cc_worktree >/dev/null 2>&1" \
+    && WORKTREE_D_DEFINED=1 || true
+
+# Call cc worktree with no branch: fails early ("not a git repository") but
+# must NOT print the old zsh-only message.
+WORKTREE_D_OUT=$(
+    HOME="$TESTHOME" PATH="$TMPBIN:$PATH" \
+    bash -c "source '$REPO_DIR/shell/cc.sh'; cc worktree 2>&1" || true
+)
+
+if [[ "$WORKTREE_D_DEFINED" -eq 1 ]] && ! printf '%s' "$WORKTREE_D_OUT" | grep -q "zsh-only"; then
+    pass "(d) bash: cc worktree is available (_cc_worktree defined, no zsh-only stub)"
 else
-    fail "(d) bash: cc worktree should print zsh-only and return non-zero (rc=$WORKTREE_RC)"
+    fail "(d) bash: cc worktree should be available (defined=$WORKTREE_D_DEFINED, out=$WORKTREE_D_OUT)"
 fi
+
+rm -f "$TESTHOME/.claude/shell/worktree.sh"
 
 # ─── zsh tests (guard only; skip gracefully if zsh absent) ───────────────────
 printf '\n=== zsh tests ===\n'
@@ -113,9 +125,9 @@ else
     cp "$REPO_DIR/shell/cc/dispatch.zsh"         "$ZSH_HOME/.claude/shell/cc/"
     cp "$REPO_DIR/shell/cc.zsh"                  "$ZSH_HOME/.claude/shell/"
 
-    # Stub worktree.zsh: complex + not needed for guard tests.
+    # Stub worktree.sh: complex + not needed for guard tests.
     printf '# stub\n_cc_worktree() { printf "worktree stub\\n" >&2; return 1; }\n' \
-        > "$ZSH_HOME/.claude/shell/worktree.zsh"
+        > "$ZSH_HOME/.claude/shell/worktree.sh"
 
     # Stub config-hash.sh (sourced by config-drift.zsh).
     printf 'config_hash() { printf "testhash\\n"; }\n' \

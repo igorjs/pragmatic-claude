@@ -1,14 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
 #
-# worktree.zsh: engine for the `cc worktree <branch>` / `ccd worktree`
+# worktree.sh: engine for the `cc worktree <branch>` / `ccd worktree`
 # subcommand: creates/enters a git worktree with smart defaults, then cd's the
 # current shell into it. Not exposed as a standalone command (the entry point is
 # the private `_cc_worktree`, called only by the _claude dispatcher).
 #
-# Sourced into the interactive shell (via cc.zsh), so it uses `return` not
-# `exit`, never sets global shell options, and restores the auto-stash through
-# a zsh `always {}` block instead of an EXIT trap.
+# Sourceable in bash and zsh (no zsh-only builtins or options).
 #
 # Features: a grouped worktree base dir (WORKTREE_BASE_DIR, default .worktrees)
 # holding <repo>/<folder>, JIRA-key folder naming (PROJECT-1234-foo ->
@@ -18,21 +16,23 @@
 #
 # Flags: --ai-resolve (or WORKTREE_AI_RESOLVE=1) lets Claude resolve rebase
 # conflicts; otherwise a conflict just aborts the rebase.
+#
+# Test seam: set _WT_NO_LAUNCH=1 to skip the session launch after setup.
 
 # Default prompt sent to claude when auto-resolving rebase conflicts.
 # Override before sourcing: _WT_AI_RESOLVE_PROMPT="your prompt"
 : ${_WT_AI_RESOLVE_PROMPT:="Resolve the current git rebase conflicts. Run 'git diff --name-only --diff-filter=U' to find conflicted files, read each, fix the markers, 'git add' them, then 'git rebase --continue'. Keep both sides where intent is clear; if ambiguous, prefer the incoming (origin/\$BASE_REF) version."}
 
-_wt_die() { print -u2 -- "worktree: $1"; return "${2:-1}"; }
+_wt_die() { printf '%s\n' "worktree: $1" >&2; return "${2:-1}"; }
 
 # Decide the conflict action once AI-resolve is on and claude is available.
 # $1 silent(0/1)  $2 is_tty(0/1)  $3 answer(raw read)  ->  spawn|abort
 _wt_ai_resolve_decision() {
-    (( $1 )) && { print -- spawn; return; }
+    (( $1 )) && { printf '%s\n' spawn; return; }
     if (( $2 )); then
-        case "$3" in ""|[Yy]|[Yy][Ee][Ss]) print -- spawn ;; *) print -- abort ;; esac
+        case "$3" in ""|[Yy]|[Yy][Ee][Ss]) printf '%s\n' spawn ;; *) printf '%s\n' abort ;; esac
     else
-        print -- abort
+        printf '%s\n' abort
     fi
 }
 
@@ -40,28 +40,28 @@ _wt_ai_resolve_decision() {
 # $1 branch  $2 base (e.g. origin/main)  $3 conflicted file list
 _wt_ai_resolve_info() {
     local branch="$1" base="$2" files="$3"
-    print -u2 -- "--- worktree: rebase conflict ---"
-    print -u2 -- "  Branch : $branch"
-    print -u2 -- "  Base   : $base"
-    print -u2 -- "  Files  : $files"
-    print -u2 -- "Auto-resolve will: spawn 'claude -p --model haiku', read each conflicted"
-    print -u2 -- "  file, fix markers, run 'git add', then 'git rebase --continue'."
-    print -u2 -- "  When ambiguous, prefer origin/<base> (incoming) version."
-    print -u2 -- "---------------------------------"
+    printf '%s\n' "--- worktree: rebase conflict ---" >&2
+    printf '%s\n' "  Branch : $branch" >&2
+    printf '%s\n' "  Base   : $base" >&2
+    printf '%s\n' "  Files  : $files" >&2
+    printf '%s\n' "Auto-resolve will: spawn 'claude -p --model haiku', read each conflicted" >&2
+    printf '%s\n' "  file, fix markers, run 'git add', then 'git rebase --continue'." >&2
+    printf '%s\n' "  When ambiguous, prefer origin/<base> (incoming) version." >&2
+    printf '%s\n' "---------------------------------" >&2
 }
 
 _wt_help() {
-    print -- 'cc worktree <branch> [env-base-folder]   (also ccd worktree)'
-    print -- '  Create or enter a git worktree for <branch> and start a session in it.'
-    print -- '  Folder name is the JIRA key in the branch, else the branch leaf.'
-    print -- '  Worktrees live in <repo-parent>/<base>/<repo>/<folder> (base = WORKTREE_BASE_DIR, default .worktrees).'
-    print -- '  Claude auto-resolves rebase conflicts on your own branches (WORKTREE_AI_RESOLVE=0 disables).'
-    print -- '  --no-push   Skip auto-creating the remote branch (env: WORKTREE_NO_PUSH=1).'
-    print -- '              Run "git push -u <remote> <branch>" manually when ready.'
+    printf '%s\n' 'cc worktree <branch> [env-base-folder]   (also ccd worktree)'
+    printf '%s\n' '  Create or enter a git worktree for <branch> and start a session in it.'
+    printf '%s\n' '  Folder name is the JIRA key in the branch, else the branch leaf.'
+    printf '%s\n' '  Worktrees live in <repo-parent>/<base>/<repo>/<folder> (base = WORKTREE_BASE_DIR, default .worktrees).'
+    printf '%s\n' '  Claude auto-resolves rebase conflicts on your own branches (WORKTREE_AI_RESOLVE=0 disables).'
+    printf '%s\n' '  --no-push   Skip auto-creating the remote branch (env: WORKTREE_NO_PUSH=1).'
+    printf '%s\n' '              Run "git push -u <remote> <branch>" manually when ready.'
 }
 
 # md5 (macOS) | md5sum (Linux) -> short stable hash of a string
-_wt_hash() { print -- "$1" | md5 -q 2>/dev/null || md5sum <<< "$1" | cut -c1-8; }
+_wt_hash() { printf '%s\n' "$1" | md5 -q 2>/dev/null || md5sum <<< "$1" | cut -c1-8; }
 
 # Detect base branch as a remote-tracking ref, e.g. origin/main
 _wt_base_branch() {
@@ -73,7 +73,7 @@ _wt_base_branch() {
             if git show-ref --verify --quiet "refs/remotes/origin/$cand"; then base="$cand"; break; fi
         done
     fi
-    print -- "origin/${base:-master}"
+    printf '%s\n' "origin/${base:-master}"
 }
 
 # Resolve the base directory that holds this repo's worktrees: <base>/<repo>,
@@ -87,16 +87,16 @@ _wt_resolve_base() {
     local base="${WORKTREE_BASE_DIR:-.worktrees}"
     [[ "$base" == "." ]] && base=".worktrees"   # never collapse into the repo root
     if [[ "$base" == /* ]]; then
-        print -- "$base/$repo_name"
+        printf '%s\n' "$base/$repo_name"
     else
-        print -- "$repo_parent/$base/$repo_name"
+        printf '%s\n' "$repo_parent/$base/$repo_name"
     fi
 }
 
 # Create a worktree, recovering from prune/repair if needed. Echoes the path.
 _wt_create_worktree() {
     local dest="$1" ref="$2" new_branch="${3:-}"
-    local -a cmd_args
+    local -a cmd_args=()
     [[ -n "$new_branch" ]] && cmd_args+=(-b "$new_branch")
     cmd_args+=("$dest" "$ref")
 
@@ -107,15 +107,15 @@ _wt_create_worktree() {
             local existing
             existing="$(git worktree list --porcelain | awk -v b="refs/heads/${new_branch:-$ref}" '$1=="worktree"{w=$2} $1=="branch"&&$2==b{print w}')"
             if [[ -n "$existing" && -d "$existing" ]]; then
-                print -u2 -- "branch already at $existing"
-                print -- "$existing"
+                printf '%s\n' "branch already at $existing" >&2
+                printf '%s\n' "$existing"
                 return 0
             fi
-            print -u2 -- "git worktree add failed"
+            printf '%s\n' "git worktree add failed" >&2
             return 3
         fi
     fi
-    print -- "$dest"
+    printf '%s\n' "$dest"
 }
 
 # Correct upstream tracking (push to create the remote branch if missing)
@@ -136,15 +136,15 @@ _wt_setup_upstream() {
 _wt_find_env_base() {
     local base_arg="${1:-}"
     if [[ -n "$base_arg" ]]; then
-        [[ "$base_arg" == "." && -f "$REPO_ROOT/.env" ]] && { print -- "."; return; }
-        [[ -f "$REPO_ROOT/$base_arg/.env" ]] && { print -- "$base_arg"; return; }
+        [[ "$base_arg" == "." && -f "$REPO_ROOT/.env" ]] && { printf '%s\n' "."; return; }
+        [[ -f "$REPO_ROOT/$base_arg/.env" ]] && { printf '%s\n' "$base_arg"; return; }
     else
-        [[ -f "$REPO_ROOT/.env" ]] && { print -- "."; return; }
+        [[ -f "$REPO_ROOT/.env" ]] && { printf '%s\n' "."; return; }
         local env_path
         env_path="$(find "$REPO_ROOT" -mindepth 2 -maxdepth 2 -type f -name .env 2>/dev/null | head -n1)"
         [[ -n "$env_path" ]] && { basename "$(dirname "$env_path")"; return; }
     fi
-    print -- ""
+    printf '%s\n' ""
 }
 
 # Copy .env into a destination worktree (no-clobber). Only copies when the .env
@@ -158,7 +158,7 @@ _wt_copy_env() {
     local src="$REPO_ROOT/$rel"
     [[ -f "$src" ]] || return 0
     if ! git -C "$REPO_ROOT" check-ignore -q "$rel" 2>/dev/null; then
-        print -u2 -- "worktree: $rel is not gitignored in the source repo; skipping .env copy to avoid staging secrets."
+        printf '%s\n' "worktree: $rel is not gitignored in the source repo; skipping .env copy to avoid staging secrets." >&2
         return 0
     fi
     [[ "$ENV_BASE" == "." ]] || mkdir -p "$dest/$ENV_BASE" 2>/dev/null || true
@@ -171,23 +171,23 @@ _wt_node_modules() {
     [[ -f "$REPO_ROOT/package-lock.json" ]] || return 0
     [[ -d "$REPO_ROOT/node_modules" ]] || return 0
 
-    local hasher=""
-    command -v sha256sum >/dev/null && hasher="sha256sum"
-    command -v shasum >/dev/null && [[ -z "$hasher" ]] && hasher="shasum -a 256"
-    [[ -z "$hasher" ]] && return 0
+    local -a _hasher_cmd=()
+    command -v sha256sum >/dev/null && _hasher_cmd=(sha256sum)
+    { command -v shasum >/dev/null && [[ ${#_hasher_cmd[@]} -eq 0 ]]; } && _hasher_cmd=(shasum -a 256)
+    [[ ${#_hasher_cmd[@]} -eq 0 ]] && return 0
 
     [[ -f "package-lock.json" ]] || cp "$REPO_ROOT/package-lock.json" "./package-lock.json" 2>/dev/null || true
 
     local base_hash here_hash
-    base_hash="$(${=hasher} < "$REPO_ROOT/package-lock.json" | awk '{print $1}')"
-    here_hash="$(${=hasher} < "package-lock.json" | awk '{print $1}')"
+    base_hash="$("${_hasher_cmd[@]}" < "$REPO_ROOT/package-lock.json" | awk '{print $1}')"
+    here_hash="$("${_hasher_cmd[@]}" < "package-lock.json" | awk '{print $1}')"
     [[ "$base_hash" != "$here_hash" ]] && return 0
 
     [[ -e "node_modules" ]] && rm -rf "node_modules"
     cp -cR "$REPO_ROOT/node_modules" "node_modules" 2>/dev/null \
       || { rm -rf "node_modules"; cp -R --reflink=auto "$REPO_ROOT/node_modules" "node_modules" 2>/dev/null; } \
       || { rm -rf "node_modules"; cp -R "$REPO_ROOT/node_modules" "node_modules"; }
-    print -u2 -- "Cloned node_modules (copy-on-write)"
+    printf '%s\n' "Cloned node_modules (copy-on-write)" >&2
     command -v npm >/dev/null && { npm install --prefer-offline --no-audit --no-fund >&2 2>&1 || true; }
 }
 
@@ -201,7 +201,7 @@ _wt_cleanup_stale() {
 
     cd "$REPO_ROOT" || return 0
 
-    local base_branch cutoff_epoch merged open_prs
+    local base_branch cutoff_epoch merged open_prs=""
     base_branch="$(_wt_base_branch)"
     cutoff_epoch="$(date -v-30d +%s 2>/dev/null || date -d '30 days ago' +%s)"
     merged="$(git branch --merged "$base_branch" 2>/dev/null | sed 's/^[[:space:]*+]*//')"
@@ -216,10 +216,10 @@ _wt_cleanup_stale() {
         local wt_branch
         wt_branch="$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
         [[ -z "$wt_branch" ]] && continue
-        if [[ -n "$open_prs" ]] && print -- "$open_prs" | grep -qxF "$wt_branch"; then continue; fi
+        if [[ -n "$open_prs" ]] && printf '%s\n' "$open_prs" | grep -qxF "$wt_branch"; then continue; fi
 
         local dominated=0
-        if print -- "$merged" | grep -qxF "$wt_branch"; then dominated=1; fi
+        if printf '%s\n' "$merged" | grep -qxF "$wt_branch"; then dominated=1; fi
         if (( ! dominated )); then
             local commit_epoch
             commit_epoch="$(git -C "$wt_path" log -1 --format='%ct' 2>/dev/null || echo 0)"
@@ -235,7 +235,7 @@ _wt_cleanup_stale() {
     git worktree prune 2>/dev/null || true
 }
 
-# Pop the main-worktree auto-stash, if we took one (called from `always {}`).
+# Pop the main-worktree auto-stash, if we took one.
 # Use `git -C` rather than `cd`: this runs after _wt_main has cd'd the shell into
 # the new worktree, and cd-ing back to main here would strand the shell there, so
 # the session would start on the base branch instead of the new one.
@@ -268,7 +268,7 @@ _wt_main() {
     git fetch "$REMOTE" --quiet "$BASE_REF" "$BRANCH" 2>/dev/null \
       || git fetch "$REMOTE" --quiet "$BASE_REF" 2>/dev/null || true
 
-    # Auto-stash a dirty main worktree (restored by the always {} block)
+    # Auto-stash a dirty main worktree (restored by _wt_restore_stash after return)
     if ! git diff-index --quiet HEAD -- 2>/dev/null || ! git diff --quiet 2>/dev/null; then
         git stash push -m "worktree: auto-stash" --quiet 2>/dev/null && STASH_APPLIED=1
     fi
@@ -283,7 +283,7 @@ _wt_main() {
         in_use="$(git worktree list --porcelain | awk -v t="$TARGET" '$1=="worktree"{w=$2} w==t && $1=="branch"{sub("refs/heads/","",$2); print $2}')"
         if [[ -n "$in_use" && "$in_use" != "$BRANCH" ]]; then
             FOLDER="${BRANCH##*/}"; TARGET="$WT_ROOT/$FOLDER"
-            print -u2 -- "Worktree $JIRA_KEY in use by '$in_use'. Using '$FOLDER' instead."
+            printf '%s\n' "Worktree $JIRA_KEY in use by '$in_use'. Using '$FOLDER' instead." >&2
         fi
     fi
 
@@ -295,7 +295,7 @@ _wt_main() {
         is_registered="$(git worktree list --porcelain | awk -v t="$TARGET" '$1=="worktree" && $2==t{print "yes"}')"
 
         if [[ -z "$current_branch" && "$is_registered" == "yes" ]]; then
-            print -u2 -- "Worktree at $TARGET has detached HEAD. Recovering..."
+            printf '%s\n' "Worktree at $TARGET has detached HEAD. Recovering..." >&2
             git -C "$TARGET" rebase --abort 2>/dev/null || true
             git -C "$TARGET" merge  --abort 2>/dev/null || true
             git -C "$TARGET" checkout "$BRANCH" 2>/dev/null || {
@@ -304,14 +304,14 @@ _wt_main() {
             }
             current_branch="$(git -C "$TARGET" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
             if [[ "$current_branch" == "HEAD" ]]; then
-                print -u2 -- "Recovery failed. Removing and recreating worktree..."
+                printf '%s\n' "Recovery failed. Removing and recreating worktree..." >&2
                 git worktree remove --force "$TARGET" 2>/dev/null || { rm -rf "$TARGET"; git worktree prune 2>/dev/null; }
                 current_branch=""; is_registered=""
             fi
         fi
 
         if [[ -z "$current_branch" && "$is_registered" != "yes" ]]; then
-            print -u2 -- "Orphaned directory at $TARGET (not a registered worktree). Cleaning up..."
+            printf '%s\n' "Orphaned directory at $TARGET (not a registered worktree). Cleaning up..." >&2
             git worktree prune >/dev/null 2>&1 || true
             rm -rf "$TARGET"
             worktree_path="$(_wt_make "$TARGET")" || return $?
@@ -327,7 +327,7 @@ _wt_main() {
                 _wt_die "worktree at $TARGET is on branch '$current_branch' which still exists on remote. Finish it or remove the worktree first." 5
                 return $?
             fi
-            print -u2 -- "Previous branch '$current_branch' merged/deleted on remote. Recycling worktree for '$BRANCH'..."
+            printf '%s\n' "Previous branch '$current_branch' merged/deleted on remote. Recycling worktree for '$BRANCH'..." >&2
             git worktree remove --force "$TARGET" >/dev/null 2>&1 || { rm -rf "$TARGET"; git worktree prune >/dev/null 2>&1 || true; }
             git branch -D "$current_branch" >/dev/null 2>&1 || true
             worktree_path="$(_wt_make "$TARGET")" || return $?
@@ -342,7 +342,7 @@ _wt_main() {
             _wt_copy_env "$existing"
             worktree_path="$existing"
         else
-            [[ -n "$existing" && ! -d "$existing" ]] && { print -u2 -- "Stale worktree for '$BRANCH' at $existing (missing). Pruning..."; git worktree prune >/dev/null 2>&1 || true; }
+            [[ -n "$existing" && ! -d "$existing" ]] && { printf '%s\n' "Stale worktree for '$BRANCH' at $existing (missing). Pruning..." >&2; git worktree prune >/dev/null 2>&1 || true; }
             worktree_path="$(_wt_make "$TARGET")" || return $?
             _wt_copy_env "$worktree_path"
         fi
@@ -352,15 +352,15 @@ _wt_main() {
 
     # If somehow detached, attach to the branch
     if [[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" == "HEAD" ]]; then
-        print -u2 -- "Worktree created detached. Attaching to $BRANCH..."
+        printf '%s\n' "Worktree created detached. Attaching to $BRANCH..." >&2
         git checkout -B "$BRANCH" HEAD 2>/dev/null || git checkout "$BRANCH" 2>/dev/null || true
     fi
 
     _wt_maybe_rebase
 
     local worktree_dir; worktree_dir="$(pwd)"
-    (( NO_PUSH )) && print -u2 -- "worktree: --no-push set; will not auto-create the remote branch. Run 'git push -u $REMOTE $BRANCH' when ready."
-    print -u2 -- "Ready: $worktree_dir"
+    (( NO_PUSH )) && printf '%s\n' "worktree: --no-push set; will not auto-create the remote branch. Run 'git push -u $REMOTE $BRANCH' when ready." >&2
+    printf '%s\n' "Ready: $worktree_dir" >&2
 
     # Background: full fetch, upstream, sync, housekeeping, cleanup
     (
@@ -391,7 +391,7 @@ _wt_make() {
         wt_path="$(_wt_create_worktree "$target" "$(_wt_base_branch)" "$BRANCH")" || return $?
         git branch --unset-upstream "$BRANCH" 2>/dev/null || true
     fi
-    print -- "$wt_path"
+    printf '%s\n' "$wt_path"
 }
 
 # Rebase own branches onto latest base. Conflicts abort unless --ai-resolve.
@@ -418,7 +418,7 @@ _wt_maybe_rebase() {
     git fetch "$REMOTE" "$BASE_REF" --quiet 2>/dev/null || true
     git merge-base --is-ancestor "$REMOTE/$BASE_REF" HEAD 2>/dev/null && return 0
 
-    local -a rebase_args
+    local -a rebase_args=()
     rebase_args=("$REMOTE/$BASE_REF" --quiet)
     git log --merges --oneline "$REMOTE/$BASE_REF..HEAD" 2>/dev/null | grep -q . && rebase_args+=(--rebase-merges)
 
@@ -430,34 +430,31 @@ _wt_maybe_rebase() {
             [[ -n "${WORKTREE_AI_RESOLVE_SILENT:-}" && "$WORKTREE_AI_RESOLVE_SILENT" != "0" ]] && silent=1
             [[ -t 0 ]] && is_tty=1
             if (( ! silent && is_tty )); then
-                print -n -u2 -- "Run auto-resolve now? [Y/n] "
+                printf '%s' "Run auto-resolve now? [Y/n] " >&2
                 read -r answer
             fi
             case "$(_wt_ai_resolve_decision "$silent" "$is_tty" "$answer")" in
                 spawn) command claude -p --model haiku "$_WT_AI_RESOLVE_PROMPT" 2>/dev/null \
-                         || { print -u2 -- "Auto-resolve failed. Aborting rebase."; git rebase --abort 2>/dev/null || true; } ;;
-                abort) print -u2 -- "Skipped auto-resolve. Aborting rebase; re-run with the branch checked out to retry."; git rebase --abort 2>/dev/null || true ;;
+                         || { printf '%s\n' "Auto-resolve failed. Aborting rebase." >&2; git rebase --abort 2>/dev/null || true; } ;;
+                abort) printf '%s\n' "Skipped auto-resolve. Aborting rebase; re-run with the branch checked out to retry." >&2; git rebase --abort 2>/dev/null || true ;;
             esac
         else
-            print -u2 -- "Rebase conflict on $current_branch onto $REMOTE/$BASE_REF. Aborting (pass --ai-resolve to let Claude fix it)."
+            printf '%s\n' "Rebase conflict on $current_branch onto $REMOTE/$BASE_REF. Aborting (pass --ai-resolve to let Claude fix it)." >&2
             git rebase --abort 2>/dev/null || true
         fi
     fi
 
     # Never leave a detached HEAD behind
     if [[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" == "HEAD" ]]; then
-        print -u2 -- "HEAD detached after rebase. Aborting and restoring."
+        printf '%s\n' "HEAD detached after rebase. Aborting and restoring." >&2
         git rebase --abort 2>/dev/null || true
         git checkout "$current_branch" 2>/dev/null || git checkout "$BRANCH" 2>/dev/null || true
     fi
 }
 
 # Private entry point (called only by the _claude dispatcher's worktree case).
-# Parses flags, then runs the body with stash-restore.
+# Parses flags, then runs the body and restores any auto-stash.
 _cc_worktree() {
-    emulate -L zsh 2>/dev/null || true
-    setopt local_options no_nomatch 2>/dev/null || true
-
     local REMOTE="origin" BRANCH="" ENV_BASE_ARG="" AI_RESOLVE=0 NO_PUSH=0
     local REPO_ROOT REPO_PARENT WT_ROOT MAIN_WORKTREE BASE_REF JIRA_KEY FOLDER TARGET ENV_BASE FETCH_CACHE
     local STASH_APPLIED=0 _wt_origin="$PWD" rc=0
@@ -482,7 +479,12 @@ _cc_worktree() {
     # WORKTREE_NO_PUSH mirrors the --no-push flag via the environment.
     [[ -n "${WORKTREE_NO_PUSH:-}" && "$WORKTREE_NO_PUSH" != "0" ]] && NO_PUSH=1
 
-    print -u2 -- "worktree: setting up '$BRANCH'..."
-    { _wt_main; rc=$? } always { _wt_restore_stash; (( rc )) && cd "$_wt_origin" 2>/dev/null }
+    printf '%s\n' "worktree: setting up '$BRANCH'..." >&2
+    _wt_main; rc=$?
+    _wt_restore_stash
+    (( rc )) && { cd "$_wt_origin" 2>/dev/null || true; return $rc; }
+    # Test seam: when _WT_NO_LAUNCH is set, worktree is ready but session launch
+    # is skipped. The dispatcher also checks this before calling claude.
+    [[ -n "${_WT_NO_LAUNCH:-}" ]] && return 0
     return $rc
 }
