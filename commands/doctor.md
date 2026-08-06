@@ -1,5 +1,5 @@
 ---
-description: Check plugin status, safety guards, settings, shell integration, and deps. Prints a status table with a remediation hint for each miss.
+description: Check the four playbook layers and print a status table with a remediation hint for each miss.
 allowed-tools: Bash, Read
 argument-hint: ""
 model: sonnet
@@ -8,22 +8,20 @@ effort: low
 
 # Doctor
 
-Run each check below, then print a status table. For every failing item,
-include a short remediation hint.
+Run all four checks below. Do not stop early if one fails. Then print a
+status table with one row per layer.
 
-## Checks
-
-Run all five checks. Do not stop early if one fails.
-
-**1. Plugin enabled**
+## Layer 1: Plugin enabled
 
 ```bash
 claude plugin list 2>/dev/null | grep -qi 'playbook'
 ```
 
-Pass if the output contains "playbook" and the line includes "enabled".
+Pass if the output contains "playbook" and the status shows it is enabled.
 
-**2. Safety guards wired**
+Remediation hint on miss: "run: claude plugin marketplace add pragmatic-engineer/marketplace && claude plugin install playbook@pragmatic-engineer"
+
+## Layer 2: Safety guards wired
 
 ```bash
 jq '[.hooks.PreToolUse[]?.hooks[]?.command]
@@ -33,43 +31,56 @@ jq '[.hooks.PreToolUse[]?.hooks[]?.command]
 
 Pass if the result is 3 or more.
 
-**3. settings.json present**
+Remediation hint on miss: "run /setup to seed settings.json with the guard hooks"
+
+## Layer 3: Launcher (opt-in)
+
+Detect the current shell:
 
 ```bash
-test -f ~/.claude/settings.json
+basename "${SHELL:-}"
 ```
 
-Pass if the file exists.
+For zsh: pass if BOTH conditions hold:
+1. `grep -qF 'shell/cc.zsh' ~/.zshrc 2>/dev/null`
+2. `test -f ~/.claude/shell/cc.zsh`
 
-**4. Shell integration present**
+For bash: pass if BOTH conditions hold:
+1. `grep -qF 'shell/cc.sh' ~/.bashrc 2>/dev/null`
+2. `test -f ~/.claude/shell/cc.sh`
+
+For any other shell: report "shell not detected" and skip this check.
+
+This layer is opt-in. Report "not installed (opt-in; run /setup)" rather than
+a hard fail when either condition is false.
+
+Remediation hint when not installed: "run /setup and choose Yes for the launcher question"
+
+## Layer 4: System prompt (opt-in)
 
 ```bash
-grep -q 'shell/cc.zsh' ~/.zshrc 2>/dev/null
+test -f ~/.claude/prompts/SYSTEM_PROMPT.md
 ```
 
-Pass if `~/.zshrc` contains the `cc.zsh` source line.
+This layer is opt-in. Report "not installed (opt-in, recommended)" rather than
+a hard fail when the file is absent.
 
-**5. Key deps available**
-
-```bash
-command -v delta jq gh
-```
-
-Pass if all three commands are found on PATH.
+Remediation hint when not installed: "run /setup and choose Yes for the system prompt question"
 
 ## Output format
 
-Print a table with one row per check. Use a clear pass or fail marker and a
-brief label. For each failing item add a one-line remediation hint. Example
-shape (use plain text, no markdown table syntax needed):
+Print a table with one row per layer. Use a clear status marker and a brief
+label. For opt-in layers that are not installed, use a neutral marker (for
+example INFO or SKIP) rather than FAIL. For each failing or missing item add a
+one-line remediation hint. Example shape:
 
 ```
 PASS  plugin enabled
-FAIL  safety guards wired        -- run /setup to seed settings.json with the guards
-PASS  settings.json present
-FAIL  shell integration          -- run /setup to add shell/cc.zsh to ~/.zshrc
-FAIL  deps (delta jq gh)         -- brew bundle --file ~/.claude/Brewfile
+PASS  safety guards wired (3 of 3)
+INFO  launcher not installed (opt-in; run /setup)    -- run /setup and choose Yes for the launcher question
+INFO  system prompt not installed (opt-in, recommended) -- run /setup and choose Yes for the system prompt question
 ```
 
-If all checks pass, say so in one line. If any fail, end with: "Run /setup to
-fix the items above."
+If all required layers pass and optional layers are installed, say so in one
+line. If any required layer fails, end with: "Run /setup to fix the items
+above."
