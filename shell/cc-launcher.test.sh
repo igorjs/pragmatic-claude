@@ -78,6 +78,10 @@ rm -f "$ARGS_C"
 rm -f "$TESTHOME/.claude/prompts/SYSTEM_PROMPT.md"
 
 # (d) cc worktree is now available in bash (_cc_worktree defined, no zsh-only stub)
+# cc.sh sources worktree.sh via $HOME/.claude/shell/worktree.sh; stage it.
+mkdir -p "$TESTHOME/.claude/shell"
+cp "$REPO_DIR/shell/worktree.sh" "$TESTHOME/.claude/shell/worktree.sh"
+
 WORKTREE_D_DEFINED=0
 HOME="$TESTHOME" PATH="$TMPBIN:$PATH" \
     bash -c "source '$REPO_DIR/shell/cc.sh'; type _cc_worktree >/dev/null 2>&1" \
@@ -95,6 +99,8 @@ if [[ "$WORKTREE_D_DEFINED" -eq 1 ]] && ! printf '%s' "$WORKTREE_D_OUT" | grep -
 else
     fail "(d) bash: cc worktree should be available (defined=$WORKTREE_D_DEFINED, out=$WORKTREE_D_OUT)"
 fi
+
+rm -f "$TESTHOME/.claude/shell/worktree.sh"
 
 # ─── zsh tests (guard only; skip gracefully if zsh absent) ───────────────────
 printf '\n=== zsh tests ===\n'
