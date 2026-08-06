@@ -4,23 +4,26 @@
 #
 # setup-local.sh: idempotent local wiring for pragmatic-engineer/playbook.
 # Copies the always-on safety-guard hooks, seeds or merges settings.json from
-# the shipped template, and optionally installs deps (brew) and the shell
-# launcher (cc.zsh into ~/.zshrc).
+# the shipped template, and optionally installs deps (brew), the shell
+# launchers (cc.sh/cc.zsh), and the system prompt.
 #
 # Self-locates its own source tree so it works when called from install.sh
 # (after the file-copy loop) or directly from the /setup plugin command.
 #
-# Usage:  bash shell/setup-local.sh [--skip-deps] [--skip-shell] [--yes]
+# Usage:  bash shell/setup-local.sh [--aliases] [--system-prompt] [--skip-deps] [--yes]
 # Env:    CLAUDE_HOME  target directory (default: $HOME/.claude)
 #
-# Flags --skip-plugin is accepted and silently ignored; guard wiring and
-# settings seeding always run (that is the purpose of this script).
+# Flags --skip-plugin and --skip-shell are accepted and silently ignored.
+# Default (no --aliases, no --system-prompt): copy the 3 guard hooks and
+# seed/merge settings.json only. The shell rc and launcher files are NOT
+# touched unless --aliases is given.
 set -euo pipefail
 
 SELF_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SKIP_DEPS=0
-SKIP_SHELL=0
+OPT_ALIASES=0
+OPT_SYSTEM_PROMPT=0
 # ASSUME_YES is parsed for forward-compatibility; setup-local.sh has no
 # interactive prompts of its own.
 ASSUME_YES=0
@@ -36,11 +39,13 @@ die()  { printf '%serror:%s %s\n'   "$C_R" "$C_0" "$*" >&2; exit 1; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --skip-deps)   SKIP_DEPS=1 ;;
-        --skip-shell)  SKIP_SHELL=1 ;;
-        --yes|-y)      ASSUME_YES=1 ;;
-        --skip-plugin) ;; # accepted, ignored -- wiring always runs
-        *)             die "unknown option: $1" ;;
+        --skip-deps)     SKIP_DEPS=1 ;;
+        --aliases)       OPT_ALIASES=1 ;;
+        --system-prompt) OPT_SYSTEM_PROMPT=1; OPT_ALIASES=1 ;;
+        --yes|-y)        ASSUME_YES=1 ;;
+        --skip-plugin)   ;; # accepted, ignored -- wiring always runs
+        --skip-shell)    ;; # accepted, ignored -- use --aliases to wire shell
+        *)               die "unknown option: $1" ;;
     esac
     shift
 done
@@ -152,18 +157,97 @@ if [ "$SKIP_DEPS" -eq 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Wire the shell launcher into ~/.zshrc (unless --skip-shell).
-#    Single quotes intentional: write the literal \$HOME so zsh expands it
-#    at runtime, not the install-time value.
+# 4. (--aliases) Copy the shell launcher runtime files and wire the rc file.
+#    Copies every file/dir in shell/ EXCEPT *.test.sh files.
+#    Uses an -ef self-copy guard per file. For regular files also checks
+#    content equality (cmp -s) to report "already up to date" without re-copy.
+#    Detects the user's shell from $SHELL (basename):
+#      zsh  -> ~/.zshrc   sources $HOME/.claude/shell/cc.zsh
+#      bash -> ~/.bashrc  sources $HOME/.claude/shell/cc.sh
+#    Idempotent: grep -qF guard before appending to the rc file.
 # ---------------------------------------------------------------------------
-if [ "$SKIP_SHELL" -eq 0 ]; then
-    ZSHRC="$HOME/.zshrc"
-    if [ -f "$ZSHRC" ] && grep -qF 'shell/cc.zsh' "$ZSHRC"; then
-        log "Your .zshrc already sources cc.zsh"
+if [ "$OPT_ALIASES" -eq 1 ]; then
+    CLAUDE_SHELL_DIR="$CLAUDE_HOME/shell"
+    SELF_SHELL_DIR="$SELF_ROOT/shell"
+    mkdir -p "$CLAUDE_SHELL_DIR"
+
+    for src in "$SELF_SHELL_DIR"/*; do
+        name="$(basename "$src")"
+        case "$name" in
+            *.test.sh) continue ;;
+        esac
+        dst="$CLAUDE_SHELL_DIR/$name"
+        # Self-copy guard: same device+inode means SELF_ROOT == CLAUDE_HOME.
+        if [ "$src" -ef "$dst" ] 2>/dev/null; then
+            log "shell/$name ... already up to date"
+            continue
+        fi
+        if [ -d "$src" ]; then
+            cp -R "$src" "$dst"
+            log "shell/$name/ ... installed"
+        elif [ -f "$dst" ] && cmp -s "$src" "$dst" 2>/dev/null; then
+            log "shell/$name ... already up to date"
+        else
+            cp "$src" "$dst"
+            log "shell/$name ... installed"
+        fi
+    done
+
+    # Detect shell and wire the appropriate rc file.
+    _SHELL_BIN="$(basename "${SHELL:-}")"
+    case "$_SHELL_BIN" in
+        zsh)
+            RC_FILE="$HOME/.zshrc"
+            # shellcheck disable=SC2016
+            SOURCE_LINE='source "$HOME/.claude/shell/cc.zsh"'
+            GREP_PAT='shell/cc.zsh'
+            ;;
+        bash)
+            RC_FILE="$HOME/.bashrc"
+            # shellcheck disable=SC2016
+            SOURCE_LINE='source "$HOME/.claude/shell/cc.sh"'
+            GREP_PAT='shell/cc.sh'
+            ;;
+        *)
+            warn "Shell '$_SHELL_BIN' not recognised; source the launcher manually."
+            warn "For zsh:  source \"\$HOME/.claude/shell/cc.zsh\" in ~/.zshrc"
+            warn "For bash: source \"\$HOME/.claude/shell/cc.sh\" in ~/.bashrc"
+            _SHELL_BIN=""
+            ;;
+    esac
+
+    if [ -n "$_SHELL_BIN" ]; then
+        if grep -qF "$GREP_PAT" "$RC_FILE" 2>/dev/null; then
+            log "$RC_FILE already sources the launcher ... already up to date"
+        else
+            printf '\n# playbook launchers (cc/ccd)\n%s\n' "$SOURCE_LINE" >> "$RC_FILE"
+            log "Added launcher source line to $RC_FILE"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. (--system-prompt) Copy SYSTEM_PROMPT.md to CLAUDE_HOME/prompts/.
+#    Implied by --system-prompt; --aliases runs first.
+#    -ef guard prevents self-copy when SELF_ROOT == CLAUDE_HOME.
+#    cmp -s guard prevents unnecessary overwrites on re-run.
+# ---------------------------------------------------------------------------
+if [ "$OPT_SYSTEM_PROMPT" -eq 1 ]; then
+    SRC_PROMPT="$SELF_ROOT/prompts/SYSTEM_PROMPT.md"
+    DST_PROMPT_DIR="$CLAUDE_HOME/prompts"
+    DST_PROMPT="$DST_PROMPT_DIR/SYSTEM_PROMPT.md"
+    if [ -f "$SRC_PROMPT" ]; then
+        mkdir -p "$DST_PROMPT_DIR"
+        if [ "$SRC_PROMPT" -ef "$DST_PROMPT" ] 2>/dev/null; then
+            log "prompts/SYSTEM_PROMPT.md ... already up to date"
+        elif [ -f "$DST_PROMPT" ] && cmp -s "$SRC_PROMPT" "$DST_PROMPT" 2>/dev/null; then
+            log "prompts/SYSTEM_PROMPT.md ... already up to date"
+        else
+            cp "$SRC_PROMPT" "$DST_PROMPT"
+            log "prompts/SYSTEM_PROMPT.md ... installed"
+        fi
     else
-        # shellcheck disable=SC2016
-        printf '\n# playbook launchers (cc/ccd)\nsource "$HOME/.claude/shell/cc.zsh"\n' >> "$ZSHRC"
-        log "Added cc.zsh source to your .zshrc"
+        warn "prompts/SYSTEM_PROMPT.md not found at $SRC_PROMPT; skipping."
     fi
 fi
 

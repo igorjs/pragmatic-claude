@@ -1,40 +1,71 @@
 ---
-description: Wire the always-on safety guards, seed or merge settings.json, add shell/cc.zsh to ~/.zshrc, and install Homebrew deps.
-allowed-tools: Bash, Read
-argument-hint: ""
+description: Interactive setup for pragmatic-engineer/playbook. Wires safety guards, seeds or merges settings.json, and asks whether to install the shell launchers and system prompt.
+allowed-tools: Bash, Read, AskUserQuestion
+argument-hint: "[--aliases] [--system-prompt] [--yes]"
 model: sonnet
 effort: low
 ---
 
 # Setup
 
-Run the local wiring script to activate the always-on safety guards and the
-rest of the local config. Safe to run repeatedly; each step is idempotent.
+Wire the always-on safety guards and seed or merge settings.json. Optionally
+install the shell launchers (cc/ccd) and the custom system prompt. Each step
+is idempotent; re-running /setup is safe and only changes what is missing.
 
-## What it does
+## Step 1: Parse arguments
 
-- Copies the three safety-guard hooks (`rm-workspace-guard.sh`,
-  `bg-await-guard.sh`, `no-dash-guard.sh`) into `~/.claude/hooks/`.
-- Seeds `~/.claude/settings.json` from the shipped template on a fresh
-  install, or runs a 3-way merge that preserves your customisations on an
-  existing install.
-- Appends `source "$HOME/.claude/shell/cc.zsh"` to `~/.zshrc` if it is not
-  already present, wiring the `cc` and `ccd` launchers.
-- Runs `brew bundle` if Homebrew is available, to install the declared deps.
+Parse `$ARGUMENTS`.
 
-## Run
+If `$ARGUMENTS` contains any of `--aliases`, `--system-prompt`, or `--yes`,
+run non-interactively. Skip the questions in Step 2. Build the flag list from
+the arguments and go straight to Step 3.
 
-Ask the user if they want to proceed, then run:
+## Step 2: Ask (interactive mode only)
+
+If no flags were found in `$ARGUMENTS`, call the AskUserQuestion tool ONCE
+with these two questions:
+
+**Question 1**
+
+- header: "Aliases"
+- question: "Install the cc and ccd shell launchers?"
+- options:
+  - label: "Yes (Recommended)"
+    description: "Adds cc/ccd to your shell (session resume, model routing, transcript prune). Bash and zsh both supported."
+  - label: "No"
+    description: "Skip the launchers; run claude directly. Skills, commands, and hooks still work."
+
+**Question 2**
+
+- header: "System prompt"
+- question: "Install the custom system prompt?"
+- options:
+  - label: "Yes (Recommended)"
+    description: "Installs the senior-engineer persona and rules; cc loads it each session. Recommended for the full experience."
+  - label: "No"
+    description: "Skip the persona. The plugin content still works without it."
+
+## Step 3: Build the flag list and run
+
+Build the flag list:
+
+- Add `--aliases` if Q1 answer is "Yes (Recommended)" OR Q2 answer is
+  "Yes (Recommended)" OR `--aliases` or `--system-prompt` was in `$ARGUMENTS`.
+- Add `--system-prompt` if Q2 answer is "Yes (Recommended)" OR
+  `--system-prompt` was in `$ARGUMENTS`.
+
+The script always runs (guards and settings run regardless of the answers):
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/shell/setup-local.sh"
+bash "${CLAUDE_PLUGIN_ROOT}/shell/setup-local.sh" [flags]
 ```
 
-Report back what was done for each item:
+## Step 4: Report
 
-- Guards: were the three hook files copied (or already in place)?
-- Settings: was `settings.json` freshly seeded, merged, or already up to date?
-- Shell: was `cc.zsh` added to `~/.zshrc`, or was it already present?
-- Deps: did `brew bundle` run, and did it succeed?
+Report the script's stdout output verbatim. It prints one line per item with
+its status (for example, "already up to date" when nothing changed).
 
-If anything looks wrong, suggest running `/doctor` to see the full status.
+End your report with:
+
+"Re-running /setup is safe and only changes what is missing. Run /doctor to
+verify the full status."
