@@ -22,8 +22,9 @@ PLUGIN="playbook@pragmatic-engineer"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 REF="${PLAYBOOK_REF:-}"
 SKIP_DEPS=0
-SKIP_SHELL=0
 SKIP_PLUGIN=0
+OPT_ALIASES=0
+OPT_SYSTEM_PROMPT=0
 ASSUME_YES=0
 
 # Component dirs the plugin owns: never copied into ~/.claude directly, so the
@@ -72,34 +73,38 @@ What it does:
     and enables playbook), which provides the skills, commands, agents,
     and functional hooks;
   - installs the always-on safety guards (rm, background-await, dash guards) and
-    the other local configs (settings.json, statusline, shell launchers, deps).
+    the other local configs (settings.json, statusline, deps);
+  - optionally installs the shell launchers (cc/ccd) and the custom system prompt.
 
 Env:
   PLAYBOOK_REF=<tag|branch|sha>  source ref (default: latest release, else main)
   CLAUDE_HOME=<dir>              install target (default: $HOME/.claude)
 
 Flags:
-  --yes          non-interactive: accept every step's default
-  --skip-plugin  don't add the marketplace or install the plugin
-  --skip-deps    skip 'brew bundle'
-  --skip-shell   skip editing ~/.zshrc
-  --no-setup     skip all setup steps (install files only: no plugin, deps, shell)
-  --ref <ref>    same as PLAYBOOK_REF
-  -h, --help     show this help
+  --yes              non-interactive: accept every step's default
+  --skip-plugin      don't add the marketplace or install the plugin
+  --skip-deps        skip 'brew bundle'
+  --aliases          install the shell launchers (cc/ccd) without prompting
+  --system-prompt    install the custom system prompt without prompting (implies --aliases)
+  --no-setup         install files only: no plugin, deps, or shell edits
+  --ref <ref>        same as PLAYBOOK_REF
+  -h, --help         show this help
 EOF
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --yes|-y)     ASSUME_YES=1 ;;
-        --skip-plugin) SKIP_PLUGIN=1 ;;
-        --skip-deps)  SKIP_DEPS=1 ;;
-        --skip-shell) SKIP_SHELL=1 ;;
-        --no-setup)   SKIP_DEPS=1; SKIP_SHELL=1; SKIP_PLUGIN=1 ;;
-        --ref)        shift; REF="${1:-}" ;;
-        --ref=*)      REF="${1#--ref=}" ;;
-        -h|--help)    print_help; exit 0 ;;
-        *)            die "unknown option: $1 (try --help)" ;;
+        --yes|-y)        ASSUME_YES=1 ;;
+        --skip-plugin)   SKIP_PLUGIN=1 ;;
+        --skip-deps)     SKIP_DEPS=1 ;;
+        --skip-shell)    ;; # accepted, ignored -- use --aliases to wire shell
+        --aliases)       OPT_ALIASES=1 ;;
+        --system-prompt) OPT_SYSTEM_PROMPT=1; OPT_ALIASES=1 ;;
+        --no-setup)      SKIP_DEPS=1; SKIP_PLUGIN=1 ;;
+        --ref)           shift; REF="${1:-}" ;;
+        --ref=*)         REF="${1#--ref=}" ;;
+        -h|--help)       print_help; exit 0 ;;
+        *)               die "unknown option: $1 (try --help)" ;;
     esac
     shift
 done
@@ -172,13 +177,26 @@ shopt -u dotglob nullglob
 
 # Wire the always-on guards and seed/merge settings.json via setup-local.sh.
 # IMPORTANT: setup-local.sh is called unconditionally -- even with --no-setup.
-# --no-setup means "no plugin, no deps, no shell edits", not "no settings".
-# The guard hooks and settings.json must always be wired, so only --skip-deps
-# and --skip-shell are forwarded; there is no flag to suppress this call.
+# --no-setup means "no plugin, no deps", not "no guards or settings".
+# The guard hooks and settings.json must always be wired.
+#
+# Interactive prompts for the opt-in layers (skip when --yes or no tty):
+if [ "$OPT_ALIASES" -eq 0 ]; then
+    if ask "Install the shell launchers (cc/ccd)? Bash and zsh both supported." Y; then
+        OPT_ALIASES=1
+    fi
+fi
+if [ "$OPT_ALIASES" -eq 1 ] && [ "$OPT_SYSTEM_PROMPT" -eq 0 ]; then
+    if ask "Install the custom system prompt? (recommended)" Y; then
+        OPT_SYSTEM_PROMPT=1
+    fi
+fi
+
 _SETUP_ARGS=""
-[ "$SKIP_DEPS"  -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --skip-deps"
-[ "$SKIP_SHELL" -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --skip-shell"
-[ "$ASSUME_YES" -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --yes"
+[ "$SKIP_DEPS"          -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --skip-deps"
+[ "$OPT_ALIASES"        -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --aliases"
+[ "$OPT_SYSTEM_PROMPT"  -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --system-prompt"
+[ "$ASSUME_YES"         -eq 1 ] && _SETUP_ARGS="$_SETUP_ARGS --yes"
 # shellcheck disable=SC2086
 bash "$CLAUDE_HOME/shell/setup-local.sh" $_SETUP_ARGS
 
@@ -229,12 +247,15 @@ else
     printf '  - The toolkit is a plugin: manage it with `claude plugin list` / `enable` / `disable`.\n'
 fi
 printf '  - Safety guards (rm, background-await, dash) are always on via settings.json.\n'
+if [ "$OPT_ALIASES" -eq 1 ]; then
+    printf '  - Shell launchers installed. Open a new terminal or source the rc file to activate cc/ccd.\n'
+fi
 
 # Drop into a fresh login shell so the new config is active immediately.
-# Only when interactive and shell setup ran. Reconnect stdin to the terminal
-# (</dev/tty) so this works under `curl ... | bash`, where stdin is the pipe.
-# exec replaces this process, so nothing runs after it.
-if [ "$SKIP_SHELL" -eq 0 ] && [ -t 1 ] && [ -e /dev/tty ]; then
+# Only when interactive and the aliases were installed. Reconnect stdin to the
+# terminal (</dev/tty) so this works under `curl ... | bash`, where stdin is
+# the pipe. exec replaces this process, so nothing runs after it.
+if [ "$OPT_ALIASES" -eq 1 ] && [ -t 1 ] && [ -e /dev/tty ]; then
     USER_SHELL="${SHELL:-/bin/zsh}"
     log "Reloading your shell ($USER_SHELL)"
     exec "$USER_SHELL" -l </dev/tty
