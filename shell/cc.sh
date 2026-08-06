@@ -10,18 +10,22 @@
 #   - Prunes old transcripts (CCD_KEEP, default 5) after every launch.
 #
 # Supported subcommands:
-#   fresh       Start a brand-new session (no resume).
-#   list / ls   Show recent sessions for $PWD with timestamps.
-#   prune       Run the transcript prune immediately.
-#   worktree / new   Not supported; prints a message and returns non-zero.
+#   fresh            Start a brand-new session (no resume).
+#   list / ls        Show recent sessions for $PWD with timestamps.
+#   prune            Run the transcript prune immediately.
+#   worktree / new   Create or enter a git worktree, then launch a session.
 #
-# Subcommands not ported (use zsh): clean, raw, config-drift fork, worktree.
+# Subcommands not ported (use zsh): clean, raw, config-drift fork.
 #
 # Install: source ~/.claude/shell/cc.sh from ~/.bashrc
 #   source ~/.claude/shell/cc.sh
 #
 # bash -n shell/cc.sh must pass.  No zsh-isms: no typeset -A, no (N) globs,
 # no setopt, no zparseopts, no ${(f)...}, no zmodload.
+
+# ─── worktree engine ─────────────────────────────────────────────────────────
+# shellcheck source=shell/worktree.sh
+source "$HOME/.claude/shell/worktree.sh"
 
 # ─── private helpers ─────────────────────────────────────────────────────────
 
@@ -151,8 +155,12 @@ _cc_bash_dispatch() {
             return $?
             ;;
         worktree|--worktree|new|--new)
-            printf 'cc worktree is zsh-only for now; use zsh for worktrees.\n' >&2
-            return 1
+            shift
+            _cc_worktree --ai-resolve "$@" || return $?
+            [[ -n "${_WT_NO_LAUNCH:-}" ]] && return 0
+            name="${PWD##*/}"
+            command claude "${flags[@]}" -n "$name"
+            return $?
             ;;
     esac
 
