@@ -124,9 +124,9 @@ If the plan or ADR blueprint ends with a "Confidence + open items" trailer, read
 
 If the plan came from `/scope` or `/adr` it already has a companion `*-quality.md` report; trust it and skip to Step 5. Otherwise (a file/issue/ticket spec), run the inlined 3-phase gate before executing:
 
-1. **Fact-Check** (`Explore` agent, under `grounding-research`): every referenced path exists, signatures/imports match, downstream consumers identified, test infra present.
-2. **Adversarial Review** (`general-purpose` agent + the fact-check report): simpler alternatives, scope creep, missing error paths, blast radius.
-3. **Test Review** (`Explore` agent, under `engineering-standards`): regression-pinning, flakiness, independence, mock quality, assertion strength.
+1. **Fact-Check** (`fact-checker` agent): every referenced path exists, signatures/imports match, downstream consumers identified, test infra present.
+2. **Adversarial Review** (`critic` agent, focus `pre-exec`, + the fact-check report): simpler alternatives, scope creep, missing error paths, blast radius.
+3. **Test Review** (`test-reviewer` agent): regression-pinning, flakiness, independence, mock quality, assertion strength.
 
 Max 3 iterations per phase; revise on FAIL. A FAIL blocks execution unless the user explicitly overrides (or `--auto --force`). If a project store is present at `~/.claude/memory/<owner>/<repo>/`, record gotchas and rejected alternatives as memory facts; otherwise skip silently.
 
@@ -303,7 +303,7 @@ Run this pass once. Don't loop: Step 9 is the backstop for whatever remains.
 
 ## Step 9: Adversarial Review (MUST)
 
-This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran before execution against the plan; this one runs after, against the diff. Dispatch it as a swarm of lens-specialized reviewers in parallel (each reads the diff, none writes, so parallel is always safe): issue one Agent call per lens in a single message, each a `general-purpose` agent on the capable tier under the `grounding-review` discipline, with the full branch diff, the plan, and the refinement notes. Each lens tries to break the work, not bless it:
+This reviews the IMPLEMENTED work, not the plan: Step 4's adversarial review ran before execution against the plan; this one runs after, against the diff. Dispatch it as a swarm of lens-specialized reviewers in parallel (each reads the diff, none writes, so parallel is always safe): issue one Agent call per lens in a single message, each a `reviewer` agent (`subagent_type: reviewer`), with its lens as the focus, the full branch diff, the plan, and the refinement notes. Each lens tries to break the work, not bless it:
 
 - **Correctness:** bugs, off-by-one, unhandled errors, regressions the tests miss.
 - **Behaviour drift:** did any simplification or refactor change observable behaviour?
