@@ -27,7 +27,7 @@ Parse `$ARGUMENTS`:
 2. Read files before asserting facts about them (grounding).
 3. Combine independent bash calls into a single tool call.
 4. Never edit project code or config. Writes are limited to `~/.claude/memory/` files.
-5. Dispatch subagents for collection and analysis with the Agent tool: issue the independent Agent calls in a single message so they run in parallel. Subagents return distilled structured findings, never raw dumps.
+5. Dispatch subagents for collection and analysis with the Agent tool, `collector` for Phase 1 and `analyst` for Phase 2: issue the independent Agent calls in a single message so they run in parallel. Subagents return distilled structured findings, never raw dumps.
 6. No silent truncation. If you cap commits/PRs or skip a source, the final report says so.
 7. Never persist secrets. Tokens, keys, or credentials seen in configs/CI must never enter a memory fact.
 
@@ -62,7 +62,7 @@ Then, before collecting:
 
 ## Phase 1: Collect (parallel subagents)
 
-Dispatch these collectors in parallel. Each returns a compact structured summary (tight JSON or markdown) that cites paths/refs, NOT raw command output. Spawn each collector with a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished collector, so leaving it unstopped keeps it running in the background.
+Dispatch these collectors in parallel with `subagent_type: collector`. `collector` pins Haiku, the cost win this phase is built for. Each returns a compact structured summary (tight JSON or markdown) that cites paths/refs, NOT raw command output. Spawn each collector with a stable `name`; the moment it returns its result, call `TaskStop` on it. A spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished collector, so leaving it unstopped keeps it running in the background.
 
 - **git-history**: contributors and ownership, churn hotspots (`git log --format= --name-only | sort | uniq -c | sort -rn`), commit-message and branch conventions, tags/releases, cadence.
 - **code-structure**: top-level tree, entry points, languages, build/test/lint tooling, Dockerfiles / CI-CD configs, IaC, migration dirs and ORM models, `scripts/` and Makefile targets.
@@ -72,7 +72,7 @@ Dispatch these collectors in parallel. Each returns a compact structured summary
 
 ## Phase 2: Analyze into topics (parallel subagents)
 
-Feed the Phase 1 findings to one analyst per cluster. Spawn each analyst with a stable `name` and `TaskStop` it as soon as it returns. A finished agent stays idle-alive for `SendMessage` follow-ups; this flow never reuses one, so stopping it immediately prevents lingering background processes. Each emits **candidate facts**, where each fact has: `title`, `body` (the fact, then Why, then How to apply), proposed `type` (`project` for repo knowledge, `reference` for external pointers), `scope` (`repo` | `global`), proposed `links` edges, and `anchors` (repo-relative code locations the fact describes: dirs, files, or `file#symbol`).
+Feed the Phase 1 findings to one analyst per cluster, spawned with `subagent_type: analyst`. Spawn each analyst with a stable `name` and `TaskStop` it as soon as it returns. A finished agent stays idle-alive for `SendMessage` follow-ups; this flow never reuses one, so stopping it immediately prevents lingering background processes. Each emits **candidate facts**, where each fact has: `title`, `body` (the fact, then Why, then How to apply), proposed `type` (`project` for repo knowledge, `reference` for external pointers), `scope` (`repo` | `global`), proposed `links` edges, and `anchors` (repo-relative code locations the fact describes: dirs, files, or `file#symbol`).
 
 Clusters:
 
