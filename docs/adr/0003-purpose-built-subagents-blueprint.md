@@ -24,8 +24,8 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `test -f agents/_TEMPLATE.md && grep -q 'name:' agents/_TEMPLATE.md`
 - Tests: covered by WU-1's suite (the template is the fixture the lint validates against).
 - Done When:
-  - [ ] `agents/_TEMPLATE.md` exists with all five frontmatter keys and the guardrail block.
-  - [ ] The leading `_` keeps it out of auto-discovery (confirm it is not treated as a live agent).
+  - [x] `agents/_TEMPLATE.md` exists with all five frontmatter keys and the guardrail block.
+  - [x] The leading `_` keeps it out of auto-discovery (confirm it is not treated as a live agent).
 
 ### WU-1: Agent lint and test suite
 - Requires: WU-0
@@ -41,9 +41,9 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - Scenario: read-only violation fails. Given a fixture whose description says read-only but whose `tools:` lists `Write`, when the check runs, then it exits non-zero.
   - Scenario: bad model tier fails. Given a fixture with `model: gpt`, then it exits non-zero.
 - Done When:
-  - [ ] `shell/check-agents.sh` exits 0 against the current `agents/` and non-zero on each negative fixture.
-  - [ ] The test suite is discovered by `git ls-files '*.test.sh'` and passes on Linux and macOS.
-  - [ ] `.github/workflows/shell-ci.yml` runs the check step.
+  - [x] `shell/check-agents.sh` exits 0 against the current `agents/` and non-zero on each negative fixture.
+  - [x] The test suite is discovered by `git ls-files '*.test.sh'` and passes on Linux and macOS.
+  - [x] `.github/workflows/shell-ci.yml` runs the check step.
 
 ### WU-2: `critic` agent
 - Requires: WU-1
@@ -53,8 +53,8 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `bash shell/check-agents.sh && grep -q 'premise' agents/critic.md`
 - Tests: WU-1 lint validates the file.
 - Done When:
-  - [ ] `agents/critic.md` passes `check-agents.sh`.
-  - [ ] The body names all four focus values and keeps the premise stance distinct from the convergent stances.
+  - [x] `agents/critic.md` passes `check-agents.sh`.
+  - [x] The body names all four focus values and keeps the premise stance distinct from the convergent stances.
 
 ### WU-3: `fact-checker` agent
 - Requires: WU-1
@@ -64,8 +64,8 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `bash shell/check-agents.sh && grep -q 'PASS' agents/fact-checker.md`
 - Tests: WU-1 lint.
 - Done When:
-  - [ ] `agents/fact-checker.md` passes `check-agents.sh`.
-  - [ ] Output contract matches what scope/adr/implement fact-check phases expect.
+  - [x] `agents/fact-checker.md` passes `check-agents.sh`.
+  - [x] Output contract matches what scope/adr/implement fact-check phases expect.
 
 ### WU-4: `test-reviewer` agent
 - Requires: WU-1
@@ -75,7 +75,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `bash shell/check-agents.sh && grep -q 'engineering-standards' agents/test-reviewer.md`
 - Tests: WU-1 lint.
 - Done When:
-  - [ ] `agents/test-reviewer.md` passes `check-agents.sh`.
+  - [x] `agents/test-reviewer.md` passes `check-agents.sh`.
 
 ### WU-5: `collector` agent
 - Requires: WU-1
@@ -85,7 +85,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `bash shell/check-agents.sh && grep -q 'haiku' agents/collector.md`
 - Tests: WU-1 lint.
 - Done When:
-  - [ ] `agents/collector.md` passes `check-agents.sh` and pins Haiku.
+  - [x] `agents/collector.md` passes `check-agents.sh` and pins Haiku.
 
 ### WU-6: `analyst` agent
 - Requires: WU-1
@@ -95,7 +95,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
 - Verification: `bash shell/check-agents.sh && grep -q 'anchors' agents/analyst.md`
 - Tests: WU-1 lint.
 - Done When:
-  - [ ] `agents/analyst.md` passes `check-agents.sh`.
+  - [x] `agents/analyst.md` passes `check-agents.sh`.
 
 ### WU-7: Re-point brainstorm
 - Requires: WU-2
@@ -104,7 +104,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `commands/brainstorm.md` | edit | line 108: `general-purpose` to `critic` (focus premise).
 - Verification: `grep -q 'critic' commands/brainstorm.md && ! grep -q 'general-purpose' commands/brainstorm.md`
 - Done When:
-  - [ ] `commands/brainstorm.md` names `critic` and no longer names `general-purpose`.
+  - [x] `commands/brainstorm.md` names `critic` and no longer names `general-purpose`.
 
 ### WU-8: Re-point scope
 - Requires: WU-2, WU-3, WU-4
@@ -113,7 +113,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `commands/scope.md` | edit | line 251 Explore to `fact-checker`; line 277 `general-purpose` to `critic` (focus plan); line 289 Explore to `test-reviewer`.
 - Verification: `grep -q 'fact-checker' commands/scope.md && grep -q 'test-reviewer' commands/scope.md && ! grep -q 'general-purpose' commands/scope.md`
 - Done When:
-  - [ ] All three phases in `commands/scope.md` name the new agents; no `general-purpose` remains.
+  - [x] All three phases in `commands/scope.md` name the new agents; no `general-purpose` remains.
 
 ### WU-9: Re-point adr
 - Requires: WU-2, WU-3, WU-4
@@ -122,7 +122,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `commands/adr.md` | edit | line 199 Explore to `fact-checker`; line 215 `general-purpose` to `critic` (focus decision); line 219 Explore to `test-reviewer`.
 - Verification: `grep -q 'fact-checker' commands/adr.md && grep -q 'test-reviewer' commands/adr.md && ! grep -q 'general-purpose' commands/adr.md`
 - Done When:
-  - [ ] All three phases in `commands/adr.md` name the new agents; no `general-purpose` remains.
+  - [x] All three phases in `commands/adr.md` name the new agents; no `general-purpose` remains.
 
 ### WU-10: Re-point implement
 - Requires: WU-2, WU-3, WU-4
@@ -131,8 +131,8 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `commands/implement.md` | edit | line 127 Explore to `fact-checker`; line 128 `general-purpose` to `critic` (focus pre-exec); line 129 Explore to `test-reviewer`; line 306 `general-purpose` swarm to `reviewer`.
 - Verification: `grep -q 'reviewer' commands/implement.md && grep -q 'fact-checker' commands/implement.md && ! grep -q 'general-purpose' commands/implement.md`
 - Done When:
-  - [ ] The four sites in `commands/implement.md` name the typed agents; no `general-purpose` remains.
-  - [ ] The untyped Sonnet TDD dispatch at `implement.md:237-239` is left unchanged (out of scope, noted).
+  - [x] The four sites in `commands/implement.md` name the typed agents; no `general-purpose` remains.
+  - [x] The untyped Sonnet TDD dispatch at `implement.md:237-239` is left unchanged (out of scope, noted).
 
 ### WU-11: Re-point learn-project
 - Requires: WU-5, WU-6
@@ -141,7 +141,7 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `commands/learn-project.md` | edit | Phase 1 collectors named `subagent_type: collector`; Phase 2 analysts named `subagent_type: analyst`.
 - Verification: `grep -q 'subagent_type: collector' commands/learn-project.md && grep -q 'subagent_type: analyst' commands/learn-project.md`
 - Done When:
-  - [ ] Both phases in `commands/learn-project.md` name a typed agent; no untyped Agent dispatch remains.
+  - [x] Both phases in `commands/learn-project.md` name a typed agent; no untyped Agent dispatch remains.
 
 ### WU-12: Authoring-agents docs
 - Requires: WU-0
@@ -151,8 +151,8 @@ Real paths, confirmed in Stage 1 (repo root is `~/.claude`).
   - `docs/index.md` | edit | link the new page.
 - Verification: `test -f docs/authoring/02-authoring-agents.md && grep -q 'authoring-agents' docs/index.md`
 - Done When:
-  - [ ] The page covers the schema, both bindings, the policy, and the split rule.
-  - [ ] `docs/index.md` links it.
+  - [x] The page covers the schema, both bindings, the policy, and the split rule.
+  - [x] `docs/index.md` links it.
 
 ## Ordering
 
