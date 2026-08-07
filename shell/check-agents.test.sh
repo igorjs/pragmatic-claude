@@ -22,6 +22,11 @@ WORK="$(mktemp -d)"
 # shellcheck disable=SC2064
 trap "rm -rf '${WORK}'" EXIT INT TERM
 
+# HOME isolation so no global gitconfig/hooks bleed into the scratch agent
+# fixtures.
+export HOME="${WORK}/home"
+mkdir -p "$HOME"
+
 # write_valid_agent <dir> <stem>: a fixture that satisfies every rule.
 write_valid_agent() {
   local dir="$1" stem="$2"
@@ -218,6 +223,149 @@ You are a fixture agent used only for check-agents.sh test scenarios.
 EOF
 }
 
+# write_agent_no_opening_delim <dir> <stem>: the file does not start with the
+# opening --- frontmatter delimiter at all.
+write_agent_no_opening_delim() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+This fixture has no frontmatter block, so the first line is plain prose
+instead of the required opening delimiter.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_no_closing_delim <dir> <stem>: opening delimiter present, no
+# closing --- delimiter anywhere after it.
+write_agent_no_closing_delim() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_name_mismatch <dir> <stem>: the name value is set to something
+# other than the filename stem.
+write_agent_name_mismatch() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: not-${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_missing_name <dir> <stem>: valid frontmatter minus the name key.
+write_agent_missing_name() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_missing_description <dir> <stem>: valid frontmatter minus the
+# description key.
+write_agent_missing_description() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_missing_tools <dir> <stem>: valid frontmatter minus the tools key.
+write_agent_missing_tools() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
+# write_agent_missing_guardrails_heading <dir> <stem>: valid frontmatter, the
+# guardrails section is titled differently so the required heading is absent.
+# The no dash clause stays elsewhere in the body so this fixture isolates the
+# heading rule alone.
+write_agent_missing_guardrails_heading() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+EOF
+}
+
 # write_broken_template <dir>: a _TEMPLATE.md that would fail every rule if
 # the check did not skip it (no frontmatter, no guardrails heading).
 write_broken_template() {
@@ -228,16 +376,24 @@ Not a real agent. No frontmatter, no guardrails, nothing valid here at all.
 EOF
 }
 
-run_scenario() {  # <expect: pass|fail> <name> <dir>
-  local expect="$1" name="$2" dir="$3" rc
-  bash "$CHECK" "$dir" >/dev/null 2>&1; rc=$?
+run_scenario() {  # <expect: pass|fail> <name> <dir> [expected-stderr-pattern]
+  local expect="$1" name="$2" dir="$3" pattern="${4:-}" rc out
+  out="$(bash "$CHECK" "$dir" 2>&1 >/dev/null)"
+  rc=$?
   if [[ "$expect" == pass ]]; then
     if [[ $rc -eq 0 ]]; then echo "PASS: $name"; (( PASS++ )) || true
     else echo "FAIL: $name (expected exit 0, got $rc)"; (( FAIL++ )) || true; fi
-  else
-    if [[ $rc -ne 0 ]]; then echo "PASS: $name"; (( PASS++ )) || true
-    else echo "FAIL: $name (expected non-zero, got 0)"; (( FAIL++ )) || true; fi
+    return
   fi
+  if [[ $rc -eq 0 ]]; then
+    echo "FAIL: $name (expected non-zero, got 0)"; (( FAIL++ )) || true
+    return
+  fi
+  if [[ -n "$pattern" ]] && ! printf '%s\n' "$out" | grep -q "$pattern"; then
+    echo "FAIL: $name (expected stderr matching '$pattern', got: $out)"; (( FAIL++ )) || true
+    return
+  fi
+  echo "PASS: $name"; (( PASS++ )) || true
 }
 
 # 1: the repo's own agents/ passes.
@@ -257,42 +413,42 @@ run_scenario pass "a valid new agent passes" "$VALID"
 NO_MODEL="${WORK}/no-model"
 write_agent_no_model "$NO_MODEL" "sample"
 # Act + Assert
-run_scenario fail "missing frontmatter key fails (no model)" "$NO_MODEL"
+run_scenario fail "missing frontmatter key fails (no model)" "$NO_MODEL" "missing required frontmatter key 'model'"
 
 # 4: strict-tier read-only violation fails (Write).
 # Arrange: scratch dir, description says "structurally read-only", Write in tools.
 STRICT_WRITE="${WORK}/strict-write-violation"
 write_agent_strict_write_violation "$STRICT_WRITE" "sample"
 # Act + Assert
-run_scenario fail "strict tier read-only violation fails (Write in tools)" "$STRICT_WRITE"
+run_scenario fail "strict tier read-only violation fails (Write in tools)" "$STRICT_WRITE" "or Bash, found: Write"
 
 # 5: strict-tier read-only violation fails (Bash).
 # Arrange: scratch dir, description says "structurally read-only", Bash in tools.
 STRICT_BASH="${WORK}/strict-bash-violation"
 write_agent_strict_bash_violation "$STRICT_BASH" "sample"
 # Act + Assert
-run_scenario fail "strict tier read-only violation fails (Bash in tools)" "$STRICT_BASH"
+run_scenario fail "strict tier read-only violation fails (Bash in tools)" "$STRICT_BASH" "or Bash, found: Bash"
 
 # 6: bad model tier fails.
 # Arrange: scratch dir with model: gpt.
 BAD_MODEL="${WORK}/bad-model"
 write_agent_bad_model "$BAD_MODEL" "sample"
 # Act + Assert
-run_scenario fail "bad model tier fails (gpt)" "$BAD_MODEL"
+run_scenario fail "bad model tier fails (gpt)" "$BAD_MODEL" "'gpt' is not one of"
 
 # 7: effort out of range fails.
 # Arrange: scratch dir with effort: extreme.
 BAD_EFFORT="${WORK}/bad-effort"
 write_agent_bad_effort "$BAD_EFFORT" "sample"
 # Act + Assert
-run_scenario fail "effort out of range fails (extreme)" "$BAD_EFFORT"
+run_scenario fail "effort out of range fails (extreme)" "$BAD_EFFORT" "'extreme' is not one of"
 
 # 8: missing no-dash guardrail fails.
 # Arrange: scratch dir with a guardrails heading but no no-dash clause.
 NO_DASH_MISSING="${WORK}/no-dash-missing"
 write_agent_missing_no_dash "$NO_DASH_MISSING" "sample"
 # Act + Assert
-run_scenario fail "missing no-dash guardrail fails" "$NO_DASH_MISSING"
+run_scenario fail "missing no-dash guardrail fails" "$NO_DASH_MISSING" "missing no-dash guardrail clause"
 
 # 9: _TEMPLATE.md is skipped.
 # Arrange: scratch dir with one valid agent plus a _TEMPLATE.md that would
@@ -315,7 +471,57 @@ run_scenario pass "loose tier read-only agent with Bash passes" "$LOOSE_BASH"
 LOOSE_BASH_WRITE="${WORK}/loose-bash-write-violation"
 write_agent_loose_readonly_bash_write "$LOOSE_BASH_WRITE" "sample"
 # Act + Assert
-run_scenario fail "loose tier read-only agent with Bash and Write fails" "$LOOSE_BASH_WRITE"
+run_scenario fail "loose tier read-only agent with Bash and Write fails" "$LOOSE_BASH_WRITE" "or NotebookEdit, found: Write"
+
+# 12: missing opening --- delimiter fails.
+# Arrange: scratch dir with a fixture that has no opening delimiter at all.
+NO_OPEN_DELIM="${WORK}/no-open-delim"
+write_agent_no_opening_delim "$NO_OPEN_DELIM" "sample"
+# Act + Assert
+run_scenario fail "missing opening delimiter fails" "$NO_OPEN_DELIM" "missing opening --- frontmatter delimiter"
+
+# 13: missing closing --- delimiter fails.
+# Arrange: scratch dir with an opening delimiter and no closing delimiter.
+NO_CLOSE_DELIM="${WORK}/no-close-delim"
+write_agent_no_closing_delim "$NO_CLOSE_DELIM" "sample"
+# Act + Assert
+run_scenario fail "missing closing delimiter fails" "$NO_CLOSE_DELIM" "missing closing --- frontmatter delimiter"
+
+# 14: name value does not match the filename fails.
+# Arrange: scratch dir with name set to a different value than the stem.
+NAME_MISMATCH="${WORK}/name-mismatch"
+write_agent_name_mismatch "$NAME_MISMATCH" "sample"
+# Act + Assert
+run_scenario fail "name mismatch fails" "$NAME_MISMATCH" "does not match filename"
+
+# 15: missing name key fails.
+# Arrange: scratch dir with a fixture that has no name key.
+NO_NAME="${WORK}/no-name"
+write_agent_missing_name "$NO_NAME" "sample"
+# Act + Assert
+run_scenario fail "missing frontmatter key fails (no name)" "$NO_NAME" "missing required frontmatter key 'name'"
+
+# 16: missing description key fails.
+# Arrange: scratch dir with a fixture that has no description key.
+NO_DESCRIPTION="${WORK}/no-description"
+write_agent_missing_description "$NO_DESCRIPTION" "sample"
+# Act + Assert
+run_scenario fail "missing frontmatter key fails (no description)" "$NO_DESCRIPTION" "missing required frontmatter key 'description'"
+
+# 17: missing tools key fails.
+# Arrange: scratch dir with a fixture that has no tools key.
+NO_TOOLS="${WORK}/no-tools"
+write_agent_missing_tools "$NO_TOOLS" "sample"
+# Act + Assert
+run_scenario fail "missing frontmatter key fails (no tools)" "$NO_TOOLS" "missing required frontmatter key 'tools'"
+
+# 18: missing the Non-negotiable guardrails heading fails.
+# Arrange: scratch dir with a fixture whose guardrails section is not
+# titled "## Non-negotiable guardrails".
+NO_GUARDRAILS_HEADING="${WORK}/no-guardrails-heading"
+write_agent_missing_guardrails_heading "$NO_GUARDRAILS_HEADING" "sample"
+# Act + Assert
+run_scenario fail "missing guardrails heading fails" "$NO_GUARDRAILS_HEADING" "missing '## Non-negotiable guardrails' heading"
 
 TOTAL=$(( PASS + FAIL ))
 echo ""
