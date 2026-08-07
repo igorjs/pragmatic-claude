@@ -90,8 +90,9 @@ It enforces, per file:
 - `name` matches the filename.
 - `model` is one of `haiku`, `sonnet`, `opus`.
 - `effort` is one of `low`, `medium`, `high`, `xhigh`, `max`.
+- Every entry in `tools` is a known tool name, regardless of read-only tier.
 - If `description` says `structurally read-only`, `tools` holds none of `Edit`, `Write`, `NotebookEdit`, `Bash`. If it says plain `read-only`, `tools` holds none of `Edit`, `Write`, `NotebookEdit`, and `Bash` is allowed.
-- A `## Non-negotiable guardrails` heading is present, with a no-dash clause somewhere under it.
+- A `## Non-negotiable guardrails` heading is present. Under that heading only, a no-dash clause, a grounding clause, and a zero AI attribution clause are each present somewhere.
 
 Run it before committing a new or edited agent:
 

@@ -5,8 +5,10 @@
 # check-agents.sh: validate every agents/*.md definition (excluding the
 # _TEMPLATE.md skeleton) against the house agent contract: real frontmatter,
 # the required keys, a name that matches the filename, an allowed model
-# tier and effort level, a read-only tool allowlist, and the non-negotiable
-# guardrail invariants every agent must carry.
+# tier and effort level, a known tool name allowlist, a read-only tool
+# allowlist, and the non-negotiable guardrail invariants every agent must
+# carry (heading, no dashes, grounding, zero AI attribution), all matched
+# inside the guardrails section.
 #
 # Run:  bash shell/check-agents.sh [AGENTS_DIR]
 # Exit: 0 if every agent definition is valid, non-zero (offenders on stderr)
@@ -30,6 +32,10 @@ ALLOWED_EFFORTS="low medium high xhigh max"
 # (agents/auditor.md) may hold Bash for non-mutating shell like git log.
 FORBIDDEN_TOOLS_STRICT="Edit Write NotebookEdit Bash"
 FORBIDDEN_TOOLS_LOOSE="Edit Write NotebookEdit"
+# Every tools entry, in every agent regardless of tier, must be one of
+# these. Derived from the tools agents/*.md and commands/*.md frontmatter
+# actually use, plus the forbidden set above.
+ALLOWED_TOOLS="Agent AskUserQuestion Bash Edit Glob Grep NotebookEdit Read Skill TodoWrite WebFetch WebSearch Write"
 
 violations=()
 
@@ -65,93 +71,154 @@ frontmatter_value() {
   printf '%s' "$value"
 }
 
+# frontmatter_body <file>: print the body slice between the opening and
+# closing --- frontmatter delimiters on stdout. Returns 0 on success, 1 if
+# the opening delimiter is missing, 2 if the closing delimiter is missing.
+# Never calls add_violation itself: callers invoke this through a command
+# substitution subshell, where an array mutation would not survive back to
+# the caller, so the exit status alone carries which delimiter is missing.
+frontmatter_body() {
+  local file="$1" first_line=""
+  IFS= read -r first_line < "$file"
+  [[ "$first_line" == "---" ]] || return 1
+  local closing_line
+  closing_line="$(awk 'NR>1 && $0=="---"{print NR; exit}' "$file")"
+  [[ -n "$closing_line" ]] || return 2
+  sed -n "2,$(( closing_line - 1 ))p" "$file"
+}
+
+# check_required_keys <file> <name> <body>: the five required frontmatter
+# keys, the name to filename match, and the model and effort enums.
+check_required_keys() {
+  local file="$1" name="$2" body="$3"
+  local name_value model_value effort_value
+
+  if name_value="$(frontmatter_value "$body" name)"; then
+    [[ "$name_value" == "$name" ]] \
+      || add_violation "$file: name '$name_value' does not match filename '$name'"
+  else
+    add_violation "$file: missing required frontmatter key 'name'"
+  fi
+
+  frontmatter_value "$body" description >/dev/null \
+    || add_violation "$file: missing required frontmatter key 'description'"
+
+  frontmatter_value "$body" tools >/dev/null \
+    || add_violation "$file: missing required frontmatter key 'tools'"
+
+  if model_value="$(frontmatter_value "$body" model)"; then
+    in_words "$model_value" "$ALLOWED_MODELS" \
+      || add_violation "$file: model '$model_value' is not one of: $ALLOWED_MODELS"
+  else
+    add_violation "$file: missing required frontmatter key 'model'"
+  fi
+
+  if effort_value="$(frontmatter_value "$body" effort)"; then
+    in_words "$effort_value" "$ALLOWED_EFFORTS" \
+      || add_violation "$file: effort '$effort_value' is not one of: $ALLOWED_EFFORTS"
+  else
+    add_violation "$file: missing required frontmatter key 'effort'"
+  fi
+}
+
+# check_tools <file> <body>: the tool name allowlist, which every agent's
+# tools list must satisfy regardless of tier, plus the two read-only tiers
+# read off the description wording.
+check_tools() {
+  local file="$1" body="$2"
+  local description_value tools_value
+  description_value="$(frontmatter_value "$body" description)"
+  tools_value="$(frontmatter_value "$body" tools)"
+  [[ -n "$tools_value" ]] || return 0
+
+  local old_ifs="$IFS" tok
+  IFS=','
+  # shellcheck disable=SC2086
+  set -- $tools_value
+  IFS="$old_ifs"
+
+  local unknown=""
+  for tok in "$@"; do
+    tok="$(trim "$tok")"
+    in_words "$tok" "$ALLOWED_TOOLS" \
+      || unknown="${unknown}${unknown:+, }${tok}"
+  done
+  [[ -z "$unknown" ]] \
+    || add_violation "$file: tools lists unknown tool name(s) not in the allowlist: $unknown"
+
+  [[ -n "$description_value" ]] || return 0
+
+  local forbidden="" tier_reason=""
+  if printf '%s' "$description_value" | grep -qi "structurally read-only"; then
+    forbidden="$FORBIDDEN_TOOLS_STRICT"
+    tier_reason="structurally read-only, tools must not include Edit, Write, NotebookEdit, or Bash"
+  elif printf '%s' "$description_value" | grep -qi "read-only"; then
+    forbidden="$FORBIDDEN_TOOLS_LOOSE"
+    tier_reason="read-only, tools must not include Edit, Write, or NotebookEdit"
+  fi
+  [[ -n "$forbidden" ]] || return 0
+
+  local offending=""
+  for tok in "$@"; do
+    tok="$(trim "$tok")"
+    if in_words "$tok" "$forbidden"; then
+      offending="${offending}${offending:+, }${tok}"
+    fi
+  done
+  [[ -z "$offending" ]] \
+    || add_violation "$file: description declares the agent $tier_reason, found: $offending"
+}
+
+# guardrails_section <file>: print the file content from the
+# "## Non-negotiable guardrails" heading (inclusive) to end of file. Prints
+# nothing if the heading is absent, so the section scoped rules below fail
+# closed instead of matching prose anywhere else in the file.
+guardrails_section() {
+  local file="$1"
+  awk '
+    index($0, "## Non-negotiable guardrails") { found = 1 }
+    found { print }
+  ' "$file"
+}
+
+# check_guardrails <file>: the heading, and the no-dash, grounding, and
+# attribution clauses, all matched inside the guardrails section only.
+check_guardrails() {
+  local file="$1" section
+  grep -qF '## Non-negotiable guardrails' "$file" \
+    || add_violation "$file: missing '## Non-negotiable guardrails' heading"
+
+  section="$(guardrails_section "$file")"
+
+  printf '%s\n' "$section" | grep -Eqi 'no dashes|em dash|en dash' \
+    || add_violation "$file: missing no-dash guardrail clause (no 'no dashes', 'em dash', or 'en dash' found in the guardrails section)"
+
+  printf '%s\n' "$section" | grep -Eqi 'ground|cite|quote exact' \
+    || add_violation "$file: missing grounding guardrail clause (no 'ground', 'cite', or 'quote exact' found in the guardrails section)"
+
+  printf '%s\n' "$section" | grep -Eqi 'attribution' \
+    || add_violation "$file: missing attribution guardrail clause (no 'attribution' found in the guardrails section)"
+}
+
 # check_agent <file>: run every rule against one agent definition, recording
 # violations instead of stopping at the first one.
 check_agent() {
   local file="$1" name
   name="$(basename "$file" .md)"
 
-  local first_line=""
-  IFS= read -r first_line < "$file"
-  local has_frontmatter=1 closing_line=""
-  if [[ "$first_line" != "---" ]]; then
+  local body rc
+  body="$(frontmatter_body "$file")"
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    check_required_keys "$file" "$name" "$body"
+    check_tools "$file" "$body"
+  elif [[ "$rc" -eq 1 ]]; then
     add_violation "$file: missing opening --- frontmatter delimiter"
-    has_frontmatter=0
-  else
-    closing_line="$(awk 'NR>1 && $0=="---"{print NR; exit}' "$file")"
-    if [[ -z "$closing_line" ]]; then
-      add_violation "$file: missing closing --- frontmatter delimiter"
-      has_frontmatter=0
-    fi
+  elif [[ "$rc" -eq 2 ]]; then
+    add_violation "$file: missing closing --- frontmatter delimiter"
   fi
 
-  if [[ "$has_frontmatter" -eq 1 ]]; then
-    local body
-    body="$(sed -n "2,$(( closing_line - 1 ))p" "$file")"
-
-    local name_value model_value effort_value description_value tools_value
-
-    if name_value="$(frontmatter_value "$body" name)"; then
-      [[ "$name_value" == "$name" ]] \
-        || add_violation "$file: name '$name_value' does not match filename '$name'"
-    else
-      add_violation "$file: missing required frontmatter key 'name'"
-    fi
-
-    if ! description_value="$(frontmatter_value "$body" description)"; then
-      add_violation "$file: missing required frontmatter key 'description'"
-    fi
-
-    if ! tools_value="$(frontmatter_value "$body" tools)"; then
-      add_violation "$file: missing required frontmatter key 'tools'"
-    fi
-
-    if model_value="$(frontmatter_value "$body" model)"; then
-      in_words "$model_value" "$ALLOWED_MODELS" \
-        || add_violation "$file: model '$model_value' is not one of: $ALLOWED_MODELS"
-    else
-      add_violation "$file: missing required frontmatter key 'model'"
-    fi
-
-    if effort_value="$(frontmatter_value "$body" effort)"; then
-      in_words "$effort_value" "$ALLOWED_EFFORTS" \
-        || add_violation "$file: effort '$effort_value' is not one of: $ALLOWED_EFFORTS"
-    else
-      add_violation "$file: missing required frontmatter key 'effort'"
-    fi
-
-    if [[ -n "${description_value:-}" && -n "${tools_value:-}" ]]; then
-      local forbidden="" tier_reason=""
-      if printf '%s' "$description_value" | grep -qi "structurally read-only"; then
-        forbidden="$FORBIDDEN_TOOLS_STRICT"
-        tier_reason="structurally read-only, tools must not include Edit, Write, NotebookEdit, or Bash"
-      elif printf '%s' "$description_value" | grep -qi "read-only"; then
-        forbidden="$FORBIDDEN_TOOLS_LOOSE"
-        tier_reason="read-only, tools must not include Edit, Write, or NotebookEdit"
-      fi
-      if [[ -n "$forbidden" ]]; then
-        local offending="" tok
-        local old_ifs="$IFS"
-        IFS=','
-        # shellcheck disable=SC2086
-        set -- $tools_value
-        IFS="$old_ifs"
-        for tok in "$@"; do
-          tok="$(trim "$tok")"
-          if in_words "$tok" "$forbidden"; then
-            offending="${offending}${offending:+, }${tok}"
-          fi
-        done
-        [[ -z "$offending" ]] \
-          || add_violation "$file: description declares the agent $tier_reason, found: $offending"
-      fi
-    fi
-  fi
-
-  grep -qF '## Non-negotiable guardrails' "$file" \
-    || add_violation "$file: missing '## Non-negotiable guardrails' heading"
-  grep -Eqi 'no dashes|em dash|en dash' "$file" \
-    || add_violation "$file: missing no-dash guardrail clause (no 'no dashes', 'em dash', or 'en dash' found)"
+  check_guardrails "$file"
 }
 
 count=0

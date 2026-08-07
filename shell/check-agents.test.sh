@@ -45,6 +45,8 @@ You are a fixture agent used only for check-agents.sh test scenarios.
 ## Non-negotiable guardrails
 
 1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+2. **Ground every claim.** Quote exact code with file:line citations.
+3. **Zero AI attribution.** No AI or Claude attribution anywhere.
 EOF
 }
 
@@ -133,6 +135,8 @@ You are a fixture agent used only for check-agents.sh test scenarios.
 ## Non-negotiable guardrails
 
 1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+2. **Ground every claim.** Quote exact code with file:line citations.
+3. **Zero AI attribution.** No AI or Claude attribution anywhere.
 EOF
 }
 
@@ -366,6 +370,104 @@ You are a fixture agent used only for check-agents.sh test scenarios.
 EOF
 }
 
+# write_agent_unknown_tool <dir> <stem>: valid otherwise, tools carries a
+# typo'd tool name not in the allowlist.
+write_agent_unknown_tool() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grepp, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+2. **Ground every claim.** Quote exact code with file:line citations.
+3. **Zero AI attribution.** No AI or Claude attribution anywhere.
+EOF
+}
+
+# write_agent_missing_grounding <dir> <stem>: guardrails heading present with
+# a no-dash and an attribution clause, no grounding clause anywhere in it.
+write_agent_missing_grounding() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+2. **Zero AI attribution.** No AI or Claude attribution anywhere.
+EOF
+}
+
+# write_agent_missing_attribution <dir> <stem>: guardrails heading present
+# with a no-dash and a grounding clause, no attribution clause anywhere.
+write_agent_missing_attribution() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios.
+
+## Non-negotiable guardrails
+
+1. **No dashes in prose.** No em dashes or en dashes anywhere. Use commas, colons, or separate sentences.
+2. **Ground every claim.** Quote exact code with file:line citations.
+EOF
+}
+
+# write_agent_no_dash_outside_guardrails <dir> <stem>: the no-dash wording
+# sits only in the intro prose, above the guardrails heading. The section
+# itself carries grounding and attribution clauses but no no-dash clause.
+# Pins finding 5: an unscoped match against the whole file would wrongly
+# pass this fixture.
+write_agent_no_dash_outside_guardrails() {
+  local dir="$1" stem="$2"
+  mkdir -p "$dir"
+  cat > "$dir/${stem}.md" <<EOF
+---
+name: ${stem}
+description: A structurally read-only fixture agent used to test check-agents.sh. Not for general-purpose work.
+tools: Read, Grep, Glob
+model: sonnet
+effort: medium
+---
+
+You are a fixture agent used only for check-agents.sh test scenarios. This
+intro names em dash and en dash on purpose, proving that wording outside
+the guardrails section below must not satisfy the no dashes rule.
+
+## Non-negotiable guardrails
+
+1. **Ground every claim.** Quote exact code with file:line citations.
+2. **Zero AI attribution.** No AI or Claude attribution anywhere.
+EOF
+}
+
 # write_broken_template <dir>: a _TEMPLATE.md that would fail every rule if
 # the check did not skip it (no frontmatter, no guardrails heading).
 write_broken_template() {
@@ -522,6 +624,35 @@ NO_GUARDRAILS_HEADING="${WORK}/no-guardrails-heading"
 write_agent_missing_guardrails_heading "$NO_GUARDRAILS_HEADING" "sample"
 # Act + Assert
 run_scenario fail "missing guardrails heading fails" "$NO_GUARDRAILS_HEADING" "missing '## Non-negotiable guardrails' heading"
+
+# 19: an unknown tool name fails.
+# Arrange: scratch dir with a fixture whose tools list carries a typo'd name.
+UNKNOWN_TOOL="${WORK}/unknown-tool"
+write_agent_unknown_tool "$UNKNOWN_TOOL" "sample"
+# Act + Assert
+run_scenario fail "unknown tool name fails" "$UNKNOWN_TOOL" "Grepp"
+
+# 20: a missing grounding clause fails.
+# Arrange: scratch dir with a guardrails section that has no grounding clause.
+MISSING_GROUNDING="${WORK}/missing-grounding"
+write_agent_missing_grounding "$MISSING_GROUNDING" "sample"
+# Act + Assert
+run_scenario fail "missing grounding clause fails" "$MISSING_GROUNDING" "missing grounding guardrail clause"
+
+# 21: a missing attribution clause fails.
+# Arrange: scratch dir with a guardrails section that has no attribution clause.
+MISSING_ATTRIBUTION="${WORK}/missing-attribution"
+write_agent_missing_attribution "$MISSING_ATTRIBUTION" "sample"
+# Act + Assert
+run_scenario fail "missing attribution clause fails" "$MISSING_ATTRIBUTION" "missing attribution guardrail clause"
+
+# 22: a no-dash clause outside the guardrails section fails.
+# Arrange: scratch dir where the no-dash wording sits only above the
+# guardrails heading. Pins finding 5's scoping.
+NO_DASH_OUTSIDE="${WORK}/no-dash-outside-guardrails"
+write_agent_no_dash_outside_guardrails "$NO_DASH_OUTSIDE" "sample"
+# Act + Assert
+run_scenario fail "no-dash clause outside guardrails section fails" "$NO_DASH_OUTSIDE" "missing no-dash guardrail clause"
 
 TOTAL=$(( PASS + FAIL ))
 echo ""
