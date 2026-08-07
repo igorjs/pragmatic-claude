@@ -286,7 +286,7 @@ Returns a structured report. Spawn it with a stable `name`; the moment it return
 
 #### Phase 3: Test Review
 
-Spawn a `test-reviewer` agent (`subagent_type: test-reviewer`) with the plan's Testing Strategy and the Phase 1 report. It runs in parallel with Phase 2, so it doesn't wait on the adversarial findings.
+Spawn a `test-reviewer` agent (`subagent_type: test-reviewer`) with the plan's Testing Strategy and the Phase 1 report (it runs in parallel with Phase 2, so it doesn't wait on the adversarial findings). It evaluates the proposed tests against `engineering-standards`: regression-pinning, flakiness, boundary coverage, test independence, mock quality, assertion strength.
 
 Returns a structured report. Spawn it with a stable `name`; the moment it returns, `TaskStop` it: a spawned agent stays idle-alive for `SendMessage` follow-ups and this flow never reuses a finished one, so leaving it unstopped keeps it running in the background. **After it returns**, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, persist any durable test-quality pattern as a memory fact; otherwise skip. **If any FAILs:** revise the test plan and re-run Phase 3 (max 3 iterations).
 
