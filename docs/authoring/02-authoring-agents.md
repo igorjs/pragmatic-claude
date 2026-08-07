@@ -47,9 +47,14 @@ subagent_type: reviewer
 
 The tiers follow the session-wide policy in [Model routing and memory](../internals/02-model-routing-and-memory.md): `haiku` is the default for spawned subagents doing mechanical, formatting, or search work, it's three times cheaper. Escalate to `sonnet` when the agent does real reasoning, implementation, or review, and to `opus` only for deep architectural judgment, kept under 20 percent of total usage.
 
-The three agents on disk show the range: `git` runs on `haiku` for mechanical staging and push work, `reviewer` runs on `sonnet` for review reasoning, `auditor` runs on `opus` at effort `max` for full-repo audits.
+The agents on disk show the range: `git` runs on `haiku` for mechanical staging and push work, `reviewer` runs on `sonnet` for review reasoning, `auditor` runs on `opus` at effort `max` for full-repo audits.
 
-Grant the smallest `tools` allowlist the role needs. A read-only role takes `Read, Grep, Glob, Skill` and never `Edit`, `Write`, or `Bash`, `reviewer` is that example. If `description` claims the agent is read-only, `shell/check-agents.sh` checks that `tools` actually holds none of those write tools, so the claim and the allowlist cannot drift apart.
+Grant the smallest `tools` allowlist the role needs, and say so in the `description`. There are two read-only tiers, and the wording you pick decides which one the lint applies:
+
+- **`Structurally read-only`**: no `Edit`, no `Write`, no `NotebookEdit`, and no `Bash`. The agent reads and greps, nothing else. `reviewer` is the example.
+- **`read-only`**: no `Edit`, `Write`, or `NotebookEdit`, but `Bash` is allowed for non-mutating shell like `git log` or `find`. `auditor` is the example: it audits a whole repo, so it needs shell, and it still never writes.
+
+Pick the strict wording whenever the role genuinely needs no shell. `shell/check-agents.sh` reads the tier off the `description` and checks the `tools` list against it, so the claim and the allowlist cannot drift apart.
 
 ## The guardrail template
 
@@ -70,7 +75,7 @@ The template also carries a read-only invariant and a zero-attribution invariant
 
 `reviewer` is the real parametrized example on disk: it takes a lens (`logic`, `test`, `security`, `data`, `types`, `perf`, or a conditional lens) and the same agent covers every review site across `quick-review` and `deep-review`.
 
-The ADR works the same rule with a second, proposed pair. A `critic` agent would take a focus parameter (`premise`, `plan`, `decision`, `pre-exec`) and cover several commands, because the role is one adversarial pass and the focus just flips the stance. A `fact-checker` and a `test-reviewer` would split apart instead, because one follows the `grounding-research` discipline and the other follows `engineering-standards`, checklists too different to share one file. Those three don't exist on disk yet, they land in a later change; treat them here only as the ADR's worked example for the rule, not as agents you can spawn today.
+ADR 0003 works the same rule through a second example. A `critic` takes a focus parameter (`premise`, `plan`, `decision`, `pre-exec`) and covers several commands, because the role is one adversarial pass and the focus just flips the stance. A `fact-checker` and a `test-reviewer` split apart instead, because one follows the `grounding-research` discipline and the other follows `engineering-standards`, checklists too different to share one file. Same rule, opposite answers, because the question is whether the discipline diverges, not whether the wording does.
 
 The trade-off in one line each: parametrizing keeps behaviour consistent and the file count low. Splitting keeps each checklist honest, at the cost of another file to maintain.
 
@@ -85,7 +90,7 @@ It enforces, per file:
 - `name` matches the filename.
 - `model` is one of `haiku`, `sonnet`, `opus`.
 - `effort` is one of `low`, `medium`, `high`, `xhigh`, `max`.
-- If `description` claims the agent is read-only, `tools` holds none of `Edit`, `Write`, `NotebookEdit`, `Bash`.
+- If `description` says `structurally read-only`, `tools` holds none of `Edit`, `Write`, `NotebookEdit`, `Bash`. If it says plain `read-only`, `tools` holds none of `Edit`, `Write`, `NotebookEdit`, and `Bash` is allowed.
 - A `## Non-negotiable guardrails` heading is present, with a no-dash clause somewhere under it.
 
 Run it before committing a new or edited agent:

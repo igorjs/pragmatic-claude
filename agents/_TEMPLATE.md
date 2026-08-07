@@ -1,3 +1,5 @@
+# Agent template
+
 This file is a template, not a live agent. To create a new agent, copy it to `agents/<name>.md` and fill in every placeholder. Do not add real `---` frontmatter to this template file itself: the fenced skeleton below is fenced on purpose, so this file never registers in the agent picker.
 
 ## Frontmatter skeleton
