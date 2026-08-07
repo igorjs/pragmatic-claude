@@ -196,7 +196,7 @@ After the user approves all drafts, run the three-phase gate before finalising. 
 
 ### Phase 1: Fact-Check
 
-Spawn an **Explore** agent (`subagent_type: Explore`) with the record (and blueprint, if any), working under the `grounding-research` discipline (cite `file:line`, tag `[unverified]`). It verifies: file paths in the system snapshot and file plans exist; function/type signatures referenced are accurate; the plan is consistent with existing patterns; the work unit dependency graph is acyclic and each Parallel group's WUs have disjoint files with no dependency on each other; if a memory store was loaded in Stage 1, known gotchas related to the topic are accounted for. Returns a PASS/FAIL/WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
+Spawn a `fact-checker` agent with the record (and blueprint, if any). It verifies: file paths in the system snapshot and file plans exist; function/type signatures referenced are accurate; the plan is consistent with existing patterns; the work unit dependency graph is acyclic and each Parallel group's WUs have disjoint files with no dependency on each other; if a memory store was loaded in Stage 1, known gotchas related to the topic are accounted for. Returns a PASS/FAIL/WARN report. Phase 1 folds a Verification Summary into the report, reusing the `grounding-review` table shape:
 
 ```markdown
 ## Verification Summary
@@ -212,11 +212,11 @@ After it returns, if a project store is present at `~/.claude/memory/<owner>/<re
 
 ### Phase 2: Adversarial Review
 
-Spawn a **general-purpose** agent with the record, blueprint, and the Phase 1 report. It challenges the decision: simpler alternatives, scope creep, over-engineering, missing error paths, blast radius, contradictions with the fact-check. After it returns, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, record any rejected simpler alternative (with reasoning) as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
+Spawn a `critic` agent with focus `decision`, given the record, blueprint, and the Phase 1 report. It challenges the decision: simpler alternatives, scope creep, over-engineering, missing error paths, blast radius, contradictions with the fact-check. After it returns, if a project store is present at `~/.claude/memory/<owner>/<repo>/`, record any rejected simpler alternative (with reasoning) as a memory fact; otherwise skip that step silently. **FAIL → revise and re-run (max 3).**
 
 ### Phase 3: Test Review
 
-Spawn an **Explore** agent with the blueprint's test plan and the Phase 1 report (it runs in parallel with Phase 2). For a `--record-only` ADR with no blueprint tests, this is typically `PASS: N/A (no test plan)`. For a blueprint with Gherkin scenarios or TDD cycles, evaluate them against `engineering-standards`: regression-pinning, flakiness, boundary coverage, test independence, mock quality, assertion strength. **FAIL → revise the test plan and re-run (max 3).**
+Spawn a `test-reviewer` agent with the blueprint's test plan and the Phase 1 report (it runs in parallel with Phase 2). For a `--record-only` ADR with no blueprint tests, this is typically `PASS: N/A (no test plan)`. For a blueprint with Gherkin scenarios or TDD cycles, evaluate them against `engineering-standards`: regression-pinning, flakiness, boundary coverage, test independence, mock quality, assertion strength. **FAIL → revise the test plan and re-run (max 3).**
 
 ### Structural Checks
 
