@@ -24,6 +24,7 @@ Task-oriented workflows.
 Extend the config.
 
 - [Commands, skills, and hooks](authoring/01-commands-skills-hooks.md): templates for each extension point.
+- [Authoring agents](authoring/02-authoring-agents.md): the frontmatter schema, both binding mechanisms, and the parametrize or split rule.
 
 ## Internals
 
