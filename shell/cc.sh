@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
+# shellcheck shell=bash
+# (sourced, so it has no shebang; the directive tells shellcheck the dialect)
 # Claude Code launcher: bash-compatible cc/ccd.  Source from ~/.bashrc.
 #
 # Provides cc() and ccd() mirroring the zsh launcher's core semantics:
@@ -91,7 +93,8 @@ _cc_bash_prune() {
         (( i <= keep )) && continue
         sid="${f##*/}"; sid="${sid%.jsonl}"
         rm -f "$f" 2>/dev/null
-        rm -rf "$pd/$sid" "$HOME/.claude/runtime/$sid" 2>/dev/null
+        # ${var:?} so an empty pd or sid aborts instead of expanding to /.
+        rm -rf "${pd:?}/${sid:?}" "$HOME/.claude/runtime/${sid:?}" 2>/dev/null
     done
 }
 

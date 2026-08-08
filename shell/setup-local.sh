@@ -38,6 +38,9 @@ warn() { printf '%swarning:%s %s\n' "$C_Y" "$C_0" "$*" >&2; }
 die()  { printf '%serror:%s %s\n'   "$C_R" "$C_0" "$*" >&2; exit 1; }
 
 while [ $# -gt 0 ]; do
+    # SC2034: ASSUME_YES is set here but read nowhere, on purpose. See the note
+    # above its declaration: the flag is accepted for forward-compatibility.
+    # shellcheck disable=SC2034
     case "$1" in
         --skip-deps)     SKIP_DEPS=1 ;;
         --aliases)       OPT_ALIASES=1 ;;
