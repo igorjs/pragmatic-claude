@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Igor Santos
 # SPDX-License-Identifier: MIT
+# shellcheck shell=bash
+# (sourced, so it has no shebang; the directive tells shellcheck the dialect)
 #
 # worktree.sh: engine for the `cc worktree <branch>` / `ccd worktree`
 # subcommand: creates/enters a git worktree with smart defaults, then cd's the
@@ -194,7 +196,8 @@ _wt_node_modules() {
 # Remove worktrees whose branch is merged or whose last commit is >30 days old.
 # Daily-rate-limited; skips open-PR branches, in-use dirs, and the new TARGET.
 _wt_cleanup_stale() {
-    local cache="/tmp/.git-wt-cleanup-$(_wt_hash "$REPO_ROOT")"
+    local cache
+    cache="/tmp/.git-wt-cleanup-$(_wt_hash "$REPO_ROOT")"
     local age=$(( $(date +%s) - $(stat -f%m "$cache" 2>/dev/null || stat -c %Y "$cache" 2>/dev/null || echo 0) ))
     (( age < 86400 )) && return 0
     touch "$cache"
